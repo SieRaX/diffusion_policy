@@ -1,0 +1,2 @@
+n_action_step=31
+python eval.py --checkpoint data/outputs/2025.02.16/06.47.49_train_diffusion_unet_image_square_image/checkpoints/epoch=0050-test_mean_score=0.620.ckpt --output_dir data/square_output_horizon_32/n_action_step_${n_action_step} --n_action_steps ${n_action_step}

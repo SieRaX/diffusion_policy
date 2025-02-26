@@ -18,11 +18,14 @@ import wandb
 import json
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
 
+from omegaconf import OmegaConf
+
 @click.command()
 @click.option('-c', '--checkpoint', required=True)
 @click.option('-o', '--output_dir', required=True)
 @click.option('-d', '--device', default='cuda:0')
-def main(checkpoint, output_dir, device):
+@click.option('-n', '--n_action_steps', default=8)
+def main(checkpoint, output_dir, device, n_action_steps):
     if os.path.exists(output_dir):
         click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -30,6 +33,9 @@ def main(checkpoint, output_dir, device):
     # load checkpoint
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['cfg']
+    cfg.policy.n_action_steps = n_action_steps
+    cfg.task.env_runner.n_test = 100
+
     cls = hydra.utils.get_class(cfg._target_)
     workspace = cls(cfg, output_dir=output_dir)
     workspace: BaseWorkspace
@@ -57,6 +63,7 @@ def main(checkpoint, output_dir, device):
             json_log[key] = value._path
         else:
             json_log[key] = value
+    json_log['command'] = ' '.join(sys.argv)
     out_path = os.path.join(output_dir, 'eval_log.json')
     json.dump(json_log, open(out_path, 'w'), indent=2, sort_keys=True)
 
