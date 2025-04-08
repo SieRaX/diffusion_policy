@@ -203,7 +203,11 @@ class PushTImageRunner(BaseImageRunner):
                     lambda x: x.detach().to('cpu').numpy())
 
                 action = np_action_dict['action']
-
+                action_pred = np_action_dict['action_pred']
+                # Convert numpy arrays to lists for proper serialization
+                action_pred_lst = [({'action_pred': action_pred_el},) for action_pred_el in action_pred]
+                to_env = [{'to_env': True}] * action.shape[0]
+                env.call_each('_add_info', args_list=action_pred_lst, kwargs_list=to_env)
                 # step env
                 obs, reward, done, info = env.step(action)
                 done = np.all(done)

@@ -102,6 +102,7 @@ class MultiStepWrapper(gym.Wrapper):
         """
         actions: (n_action_steps,) + action_shape
         """
+        self.env.action_seq = action
         for act in action:
             if len(self.done) > 0 and self.done[-1]:
                 # termination
@@ -116,6 +117,9 @@ class MultiStepWrapper(gym.Wrapper):
                 done = True
             self.done.append(done)
             self._add_info(info)
+        
+        for _ in range(10):
+            super().step(None)
 
         observation = self._get_obs(self.n_obs_steps)
         reward = aggregate(self.reward, self.reward_agg_method)
@@ -141,9 +145,13 @@ class MultiStepWrapper(gym.Wrapper):
         else:
             raise RuntimeError('Unsupported space type')
 
-    def _add_info(self, info):
+    def _add_info(self, info, to_env=False):
         for key, value in info.items():
             self.info[key].append(value)
+        if to_env:
+            for key, value in info.items():
+                assert key == 'action_pred'
+                self.env.info[key] = value
     
     def get_rewards(self):
         return self.reward

@@ -33,6 +33,9 @@ class PushTImageEnv(PushTEnv):
             )
         })
         self.render_cache = None
+        self.action_seq = None
+        self.action_pred = None
+        self.info = dict()
     
     def _get_obs(self):
         img = super()._render_frame(mode='rgb_array')
@@ -50,9 +53,33 @@ class PushTImageEnv(PushTEnv):
             coord = (action / 512 * 96).astype(np.int32)
             marker_size = int(8/96*self.render_size)
             thickness = int(1/96*self.render_size)
+        
+        # Draw predicted action with transparency
+        if self.info is not None and "action_pred" in self.info:
+            overlay = img.copy()
+            for i, action in enumerate(self.info["action_pred"][:64:2]):
+                coord = (action / 512 * 96).astype(np.int32)
+                cv2.drawMarker(overlay, coord,
+                    color=(0,0,255), markerType=cv2.MARKER_CROSS,
+                    markerSize=marker_size, thickness=thickness)
+            cv2.addWeighted(overlay, 0.5, img, 0.5, 0, img)
+        
+        # Draw actual action with transparency
+        if self.action_seq is not None:
+            overlay = img.copy()
+            for i, action in enumerate(self.action_seq[::2]):
+                coord = (action / 512 * 96).astype(np.int32)
+                cv2.drawMarker(overlay, coord,
+                    color=(0,255,0), markerType=cv2.MARKER_CROSS,
+                    markerSize=marker_size, thickness=thickness)
+            cv2.addWeighted(overlay, 0.5, img, 0.5, 0, img)
+        
+        # Draw latest action
+        if self.latest_action is not None:
             cv2.drawMarker(img, coord,
                 color=(255,0,0), markerType=cv2.MARKER_CROSS,
                 markerSize=marker_size, thickness=thickness)
+        
         self.render_cache = img
 
         return obs

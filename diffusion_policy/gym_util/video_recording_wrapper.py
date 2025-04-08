@@ -32,7 +32,11 @@ class VideoRecordingWrapper(gym.Wrapper):
         return obs
     
     def step(self, action):
-        result = super().step(action)
+        self.env.action_seq = self.action_seq
+        if action is None:
+            result = None
+        else:    
+            result = super().step(action)
         self.step_count += 1
         if self.file_path is not None \
             and ((self.step_count % self.steps_per_render) == 0):
