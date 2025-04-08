@@ -219,19 +219,37 @@ class TrainDiffusionTransformerHybridWorkspace(BaseWorkspace):
                 if (self.epoch % cfg.training.val_every) == 0:
                     with torch.no_grad():
                         val_losses = list()
+                        # q_val_loss = list()
+                        # val_losses = list()
                         with tqdm.tqdm(val_dataloader, desc=f"Validation epoch {self.epoch}", 
                                 leave=False, mininterval=cfg.training.tqdm_interval_sec) as tepoch:
+                            # val_action_mse_errors = list()
                             for batch_idx, batch in enumerate(tepoch):
                                 batch = dict_apply(batch, lambda x: x.to(device, non_blocking=True))
                                 loss = self.model.compute_loss(batch)
                                 val_losses.append(loss)
+
+                                # # get val_action_mse_error
+                                # obs_dict = batch['obs']
+                                # gt_action = batch['action']
+                                # result = policy.predict_action(obs_dict)
+                                # pred_action = result['action_pred']
+                                # mse = torch.nn.functional.mse_loss(pred_action, gt_action, reduction='none')
+                                # val_action_mse_errors.append(mse.mean().item())
+                                # q_val_loss.append(mse.mean(axis=[0, 1]))
+                                # del batch
+                                # del obs_dict
                                 if (cfg.training.max_val_steps is not None) \
                                     and batch_idx >= (cfg.training.max_val_steps-1):
                                     break
                         if len(val_losses) > 0:
                             val_loss = torch.mean(torch.tensor(val_losses)).item()
+                            # q_val_loss = torch.mean(torch.stack(q_val_loss, dim=0), dim=0)
                             # log epoch average validation loss
                             step_log['val_loss'] = val_loss
+                            # step_log['val_action_mse_error'] = np.mean(val_action_mse_errors)
+                            # for i in range(q_val_loss.shape[0]):
+                            #     step_log[f'val_q_loss_{i}'] = q_val_loss[i].item()
 
                 # run diffusion sampling on a training batch
                 if (self.epoch % cfg.training.sample_every) == 0:
