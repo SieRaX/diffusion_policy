@@ -1,14 +1,17 @@
 from typing import Dict
 import torch
+from torch import vmap
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import grad
 from einops import rearrange, reduce
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from diffusion_policy.schedulers.scheduling_ddpm import DDPMScheduler
 
 from diffusion_policy.model.common.normalizer import LinearNormalizer
 from diffusion_policy.policy.base_lowdim_policy import BaseLowdimPolicy
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from diffusion_policy.model.diffusion.mask_generator import LowdimMaskGenerator
+from diffusion_policy.model.diffusion.kl_divergence import normal_kl, extract
 
 class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
     def __init__(self, 
@@ -95,7 +98,428 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
 
         return trajectory
 
+    def predict_kl_grad(self, obs_dict: Dict[str, torch.Tensor], n_samples: int = 128) -> torch.Tensor:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+        assert 'obs' in obs_dict
+        assert 'past_action' not in obs_dict # not implemented yet
+        assert obs_dict['obs'].shape[0] == 1 # assert that there is only one observation as input. (For now)
+        assert self.obs_as_global_cond # only support global conditioning (For Now)
+        
+        nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
+        B, _, Do = nobs.shape
+        To = self.n_obs_steps
+        assert Do == self.obs_dim
+        T = self.horizon
+        Da = self.action_dim
+        
+        # build input
+        device = self.device
+        dtype = self.dtype
 
+        # handle different ways of passing observation
+        local_cond = None
+        global_cond = None
+        if self.obs_as_local_cond:
+            # condition through local feature
+            # all zero except first To timesteps
+            local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=dtype)
+            local_cond[:,:To] = nobs[:,:To]
+            shape = (B, T, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+        elif self.obs_as_global_cond:
+            # condition throught global feature
+            global_cond = nobs[:,:To].reshape(nobs.shape[0], -1)
+            shape = (B, T, Da)
+            if self.pred_action_steps_only:
+                shape = (B, self.n_action_steps, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            global_cond = global_cond.repeat(n_samples, 1)
+        else:
+            # condition through impainting
+            shape = (B, T, Da+Do)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            cond_data[:,:To,Da:] = nobs[:,:To]
+            cond_mask[:,:To,Da:] = True
+        
+        cond_data = cond_data.repeat(n_samples, 1, 1)
+        cond_mask = cond_mask.repeat(n_samples, 1, 1)
+            
+        model = self.model
+        scheduler = self.noise_scheduler
+        
+        # run sampling
+        nsample = self.conditional_sample(
+            cond_data, 
+            cond_mask,
+            local_cond=local_cond,
+            global_cond=global_cond,
+            **self.kwargs)
+        
+        t_lst = [1, 2, 5, 10, 20, 50, 60, 90]
+        
+        kl_grad_lst = list()
+        for t in t_lst:
+            noise = torch.randn_like(nsample)
+            timesteps = torch.full((B*n_samples, ), t, device=nsample.device)
+            x_t = scheduler.add_noise(nsample, noise, timesteps)
+            
+            true_mean, true_variance, true_log_variance_clipped = self.q_posterior(nsample, x_t, timesteps)
+            
+            global_cond_input = global_cond.clone().requires_grad_(True)
+            model_output = model(x_t, timesteps, local_cond=local_cond, global_cond=global_cond_input)
+            pred_mean, pred_variance, pred_log_variance_clipped = self.p_mean_variance(
+            x_t, t, model_output)
+            
+            kl = normal_kl(true_mean, true_log_variance_clipped,
+                    pred_mean, pred_log_variance_clipped)
+            kl_mean = kl.mean()
+            kl_grad = grad(kl_mean, global_cond_input, create_graph=True)[0].detach()
+            kl_grad_lst.append(kl_grad.norm(dim=1).mean())
+        
+        return kl_grad.mean()
+        
+        
+        
+    def predict_kl_divergence(self, obs_dict: Dict[str, torch.Tensor], n_samples: int = 128) -> torch.Tensor:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+        
+        assert 'obs' in obs_dict
+        assert 'past_action' not in obs_dict # not implemented yet
+        assert obs_dict['obs'].shape[0] == 1 # assert that there is only one observation as input. (For now)
+        
+        nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
+        B, _, Do = nobs.shape
+        To = self.n_obs_steps
+        assert Do == self.obs_dim
+        T = self.horizon
+        Da = self.action_dim
+
+        # build input
+        device = self.device
+        dtype = self.dtype
+
+        # handle different ways of passing observation
+        local_cond = None
+        global_cond = None
+        if self.obs_as_local_cond:
+            # condition through local feature
+            # all zero except first To timesteps
+            local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=dtype)
+            local_cond[:,:To] = nobs[:,:To]
+            shape = (B, T, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+        elif self.obs_as_global_cond:
+            # condition throught global feature
+            global_cond = nobs[:,:To].reshape(nobs.shape[0], -1)
+            shape = (B, T, Da)
+            if self.pred_action_steps_only:
+                shape = (B, self.n_action_steps, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            global_cond = global_cond.repeat(n_samples, 1)
+        else:
+            # condition through impainting
+            shape = (B, T, Da+Do)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            cond_data[:,:To,Da:] = nobs[:,:To]
+            cond_mask[:,:To,Da:] = True
+        
+        cond_data = cond_data.repeat(n_samples, 1, 1)
+        cond_mask = cond_mask.repeat(n_samples, 1, 1)
+            
+        model = self.model
+        scheduler = self.noise_scheduler
+        
+        # run sampling
+        nsample = self.conditional_sample(
+            cond_data, 
+            cond_mask,
+            local_cond=local_cond,
+            global_cond=global_cond,
+            **self.kwargs)
+        
+        # Sample a random timestep for each image
+        kl_lst = list()
+        num_anomaly_lst = list()
+        # for t in scheduler.timesteps[:-1]:
+        for t in [5]:
+            # get x_t
+            noise = torch.randn_like(nsample)
+            timesteps = torch.full((B*n_samples, ), t, device=nsample.device)
+            x_t = scheduler.add_noise(nsample, noise, timesteps)
+            true_mean, true_variance, true_log_variance_clipped = self.q_posterior(nsample, x_t, timesteps)
+            
+            model_output = model(x_t, timesteps, local_cond=local_cond, global_cond=global_cond)
+            pred_mean, pred_variance, pred_log_variance_clipped = self.p_mean_variance(
+                x_t, t, model_output)
+            
+            kl = normal_kl(true_mean, true_log_variance_clipped,
+                pred_mean, pred_log_variance_clipped)
+            kl = kl.mean(dim=[1,2])
+            valid_mask = kl <= 1000
+            num_anomaly = len(valid_mask) - valid_mask.sum()
+            kl_mean = kl[valid_mask].mean() if valid_mask.any() else torch.zeros_like(kl).mean()
+            kl_lst.append(kl_mean)
+            num_anomaly_lst.append(num_anomaly)
+        num_anomaly = torch.tensor(num_anomaly_lst, device=device, dtype=dtype)
+        kl_lst = torch.tensor(kl_lst, device=device, dtype=dtype)
+        return kl_lst.mean(), num_anomaly.mean()
+        
+        timesteps = torch.randint(
+            0, self.noise_scheduler.config.num_train_timesteps, 
+            (nsample.shape[0],), device=trajectory.device
+        ).long()
+        x_t = scheduler.add_noise(nsample, noise, timesteps)
+        
+        true_mean, true_variance, true_log_variance_clipped = self.q_posterior(
+            nsample, x_t, timesteps)
+        
+        # get p_mean_variance
+        model_output = model(x_t, timesteps, 
+            local_cond=local_cond, global_cond=global_cond)
+        pred_mean, pred_variance, pred_log_variance_clipped = self.p_mean_variance(
+            x_t, timesteps, model_output)
+        
+        # calculate normal kl
+        kl = normal_kl(true_mean, true_log_variance_clipped,
+            pred_mean, pred_log_variance_clipped)
+        kl = kl.mean(dim=[1,2])
+        # Create a mask for valid KL values (not larger than 1000)
+        valid_mask = kl <= 1000
+        num_anomaly = len(valid_mask) - valid_mask.sum()
+        # Calculate mean only over valid values
+        kl_mean = kl[valid_mask].mean() if valid_mask.any() else torch.zeros_like(kl).mean()
+        # If you need to keep the original tensor structure, but with proper mean:
+        kl = torch.where(kl > 1000, torch.zeros_like(kl), kl)
+        return kl_mean, num_anomaly
+        # TODO:
+        # 1. get p_mean_variance
+        # 2. calculate normal kl
+    
+    def kl_divergence_drop(self, obs_dict: Dict[str, torch.Tensor], n_samples: int = 128) -> torch.Tensor:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+        
+        assert 'obs' in obs_dict
+        assert 'past_action' not in obs_dict # not implemented yet
+        assert obs_dict['obs'].shape[0] == 1 # assert that there is only one observation as input. (For now)
+        assert self.obs_as_global_cond # only support global conditioning (For Now)
+        
+        nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
+        B, _, Do = nobs.shape
+        To = self.n_obs_steps
+        assert Do == self.obs_dim
+        T = self.horizon
+        Da = self.action_dim
+
+        # build input
+        device = self.device
+        dtype = self.dtype
+
+        # handle different ways of passing observation
+        local_cond = None
+        global_cond = None
+        if self.obs_as_local_cond:
+            # condition through local feature
+            # all zero except first To timesteps
+            local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=dtype)
+            local_cond[:,:To] = nobs[:,:To]
+            shape = (B, T, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+        elif self.obs_as_global_cond:
+            # condition throught global feature
+            global_cond = nobs[:,:To].reshape(nobs.shape[0], -1)
+            shape = (B, T, Da)
+            if self.pred_action_steps_only:
+                shape = (B, self.n_action_steps, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            global_cond = global_cond.repeat(n_samples, 1)
+        else:
+            # condition through impainting
+            shape = (B, T, Da+Do)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            cond_data[:,:To,Da:] = nobs[:,:To]
+            cond_mask[:,:To,Da:] = True
+        
+        cond_data = cond_data.repeat(n_samples, 1, 1)
+        cond_mask = cond_mask.repeat(n_samples, 1, 1)
+            
+        model = self.model
+        scheduler = self.noise_scheduler
+
+        trajectory = torch.randn(
+            size=cond_data.shape, 
+            dtype=cond_data.dtype,
+            device=cond_data.device,
+            generator=None)
+        
+        # run sampling
+        nsample = self.conditional_sample(
+            cond_data, 
+            cond_mask,
+            local_cond=local_cond,
+            global_cond=global_cond,
+            **self.kwargs)
+        
+        delta_o = 0.01
+        kl_dim_lst = list()
+        for i in range(global_cond.shape[1]):
+            global_cond_perturbed = global_cond.clone()
+            global_cond_perturbed[:,i] = global_cond[:,i] + delta_o
+
+            kl_lst = list()
+            # for t in scheduler.timesteps[:-1]:
+            for t in [5]:
+                # get x_t
+                noise = torch.randn_like(nsample)
+                timesteps = torch.full((B*n_samples, ), t, device=nsample.device)
+                x_t = scheduler.add_noise(nsample, noise, timesteps)
+                true_mean, true_variance, true_log_variance_clipped = self.q_posterior(nsample, x_t, timesteps)
+                
+                model_output = model(x_t, timesteps, local_cond=local_cond, global_cond=global_cond_perturbed)
+                pred_mean, pred_variance, pred_log_variance_clipped = self.p_mean_variance(
+                    x_t, t, model_output)
+                
+                kl = normal_kl(true_mean, true_log_variance_clipped,
+                pred_mean, pred_log_variance_clipped)
+                kl = kl.mean(dim=[1,2])
+                valid_mask = kl <= 1000
+                num_anomaly = len(valid_mask) - valid_mask.sum()
+                kl_mean = kl[valid_mask].mean() if valid_mask.any() else torch.zeros_like(kl).mean()
+                kl_lst.append(kl_mean)
+            kl_dim_lst.append(torch.tensor(kl_lst, device=device, dtype=dtype).mean())
+        
+            
+            # # Sample a random timestep for each image
+            # timesteps = torch.randint(
+            #     0, self.noise_scheduler.config.num_train_timesteps, 
+            #     (nsample.shape[0],), device=trajectory.device
+            # ).long()
+            # x_t = scheduler.add_noise(nsample, noise, timesteps)
+            
+            # true_mean, true_variance, true_log_variance_clipped = self.q_posterior(
+            #     nsample, x_t, timesteps)
+            
+            # # get p_mean_variance
+            # model_output = model(x_t, timesteps, 
+            #     local_cond=local_cond, global_cond=global_cond_perturbed)
+            # pred_mean, pred_variance, pred_log_variance_clipped = self.p_mean_variance(
+            #     x_t, timesteps, model_output)
+            
+            # # calculate normal kl
+            # kl = normal_kl(true_mean, true_log_variance_clipped,
+            #     pred_mean, pred_log_variance_clipped)
+            # kl = kl.mean(dim=[1,2])
+            # # Create a mask for valid KL values (not larger than 1000)
+            # valid_mask = kl <= 1000
+            # # Calculate mean only over valid values
+            # kl_mean = kl[valid_mask].mean() if valid_mask.any() else torch.zeros_like(kl).mean()
+            # # If you need to keep the original tensor structure, but with proper mean:
+            # kl = torch.where(kl > 1000, torch.zeros_like(kl), kl)
+            # kl_dim_lst.append(kl_mean)
+        kl_dim_lst = torch.tensor(kl_dim_lst, device=device, dtype=dtype)
+        
+        original_kl_divergence, _ = self.predict_kl_divergence(obs_dict, n_samples=n_samples)
+        
+        difference= (kl_dim_lst - original_kl_divergence).mean()/delta_o
+        return difference
+    
+    def p_mean_variance(self, x_t, t: int, model_output):
+        """
+        Compute the mean and variance of the diffusion posterior p(x_{t-1} | x_t).
+        """
+        
+        # set step values
+        scheduler = self.noise_scheduler
+        scheduler.set_timesteps(self.num_inference_steps, device=x_t.device)
+        
+        diffusion_step_output = scheduler.step(model_output, t, x_t)
+        
+        return diffusion_step_output.mean, diffusion_step_output.variance, torch.log(diffusion_step_output.variance.clamp(min=1e-20))
+        
+        # B = x_t.shape[0]
+        # model_output = model_output.unsqueeze(1)
+        # x_t = x_t.unsqueeze(1)
+        
+        # # We use iterative code for now... it would be better to somehow find batchwise computation...
+        # mean_batch = []
+        # variance_batch = []
+        
+        # for i in range(B):
+        #     diffusion_step_output = scheduler.step(model_output[i], int(t[i]), x_t[i])
+            
+        #     mean_batch.append(diffusion_step_output.mean.detach())
+        #     variance_batch.append(diffusion_step_output.variance.detach().reshape(-1, 1, 1))
+        
+        # mean = torch.cat(mean_batch, dim=0)
+        # variance = torch.cat(variance_batch, dim=0)  
+        # # def batch_wise_step(model_output, x_t, t):
+            
+        # #     diffusion_step_output = scheduler.step(
+        # #         model_output, t, x_t)
+            
+        # #     return torch.cat([diffusion_step_output.mean, diffusion_step_output.variance])
+        
+        # # model_output = model_output.unsqueeze(1)
+        # # x_t = x_t.unsqueeze(1)
+        # # diffusion_step_output = vmap(batch_wise_step)(model_output, x_t, t)
+
+        # # mean = diffusion_step_output.mean
+        # # variance = diffusion_step_output.variance
+
+        # return mean, variance, torch.log(variance.clamp(min=1e-20))
+    
+    def likelihood_gradient(self, obs_dict: Dict[str, torch.Tensor], n_samples: int = 128) -> torch.Tensor:
+        """
+        Compute the gradient of the likelihood of the model.
+        """
+        
+        pass
+    
+    def q_posterior(self, x_start, x_t, t):
+        """
+        Compute the posterior distribution q(x_{t-1} | x_t, x_0).
+        """
+        
+        B, T, D = x_start.shape
+        device = x_start.device
+        dtype = x_start.dtype
+        betas = self.noise_scheduler.betas.to(device, dtype)
+        alphas = self.noise_scheduler.alphas.to(device, dtype)
+        alphas_cumprod = self.noise_scheduler.alphas_cumprod.clone().detach().to(device, dtype)
+        
+        alphas_cumprod_prev = torch.cat([torch.ones(1, device=x_start.device), alphas_cumprod[:-1]]) 
+        posterior_mean_coef1 = (betas*torch.sqrt(alphas_cumprod_prev)) / (1-alphas_cumprod)
+        posterior_mean_coef2 = (1-alphas_cumprod_prev) * torch.sqrt(alphas) / (1-alphas_cumprod)
+        posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
+        posterior_log_variance_clipped = torch.log(posterior_variance.clamp(min=1e-20))
+        
+        posterior_mean = (
+            extract(posterior_mean_coef1, t, x_t.shape) * x_start +
+            extract(posterior_mean_coef2, t, x_t.shape) * x_t
+        )
+        
+        posterior_variance = extract(posterior_variance, t, x_t.shape)
+        posterior_log_variance_clipped = extract(posterior_log_variance_clipped, t, x_t.shape)
+        
+        return posterior_mean, posterior_variance, posterior_log_variance_clipped
+    
     def predict_action(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         obs_dict: must include "obs" key
