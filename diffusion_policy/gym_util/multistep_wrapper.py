@@ -117,9 +117,6 @@ class MultiStepWrapper(gym.Wrapper):
                 done = True
             self.done.append(done)
             self._add_info(info)
-        
-        for _ in range(10):
-            super().step(None)
 
         observation = self._get_obs(self.n_obs_steps)
         reward = aggregate(self.reward, self.reward_agg_method)

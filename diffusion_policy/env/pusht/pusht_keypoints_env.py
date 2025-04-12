@@ -3,7 +3,7 @@ from gym import spaces
 from diffusion_policy.env.pusht.pusht_env import PushTEnv
 from diffusion_policy.env.pusht.pymunk_keypoint_manager import PymunkKeypointManager
 import numpy as np
-
+import cv2
 class PushTKeypointsEnv(PushTEnv):
     def __init__(self,
             legacy=False,
@@ -67,6 +67,10 @@ class PushTKeypointsEnv(PushTEnv):
             local_keypoint_map=local_keypoint_map,
             color_map=color_map)
         self.draw_kp_map = None
+        
+        self.action_seq = None
+        self.action_pred = None
+        self.info = dict()
 
     @classmethod
     def genenerate_keypoint_manager_params(cls):
@@ -128,4 +132,32 @@ class PushTKeypointsEnv(PushTEnv):
         if self.draw_keypoints:
             self.kp_manager.draw_keypoints(
                 img, self.draw_kp_map, radius=int(img.shape[0]/96))
+            
+        # draw action
+        if self.latest_action is not None:
+            action = np.array(self.latest_action)
+            coord = (action / 512 * 96).astype(np.int32)
+            marker_size = int(8/96*self.render_size)
+            thickness = int(1/96*self.render_size)
+                
+        # Draw predicted action with transparency
+            if self.info is not None and "action_pred" in self.info:
+                overlay = img.copy()
+                for i, action in enumerate(self.info["action_pred"][:16:2]):
+                    coord = (action / 512 * 96).astype(np.int32)
+                    cv2.drawMarker(overlay, coord,
+                        color=(0,0,255), markerType=cv2.MARKER_CROSS,
+                        markerSize=marker_size, thickness=thickness)
+                cv2.addWeighted(overlay, 0.5, img, 0.5, 0, img)
+            
+            # Draw actual action with transparency
+            if self.action_seq is not None:
+                overlay = img.copy()
+                for i, action in enumerate(self.action_seq[::2]):
+                    coord = (action / 512 * 96).astype(np.int32)
+                    cv2.drawMarker(overlay, coord,
+                        color=(0,255,0), markerType=cv2.MARKER_CROSS,
+                        markerSize=marker_size, thickness=thickness)
+                cv2.addWeighted(overlay, 0.5, img, 0.5, 0, img)
+        
         return img
