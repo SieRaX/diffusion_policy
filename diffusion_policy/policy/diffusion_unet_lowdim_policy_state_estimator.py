@@ -36,7 +36,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         self.model = model
         self.noise_scheduler = noise_scheduler
         self.mask_generator = LowdimMaskGenerator(
-            action_dim=action_dim,
+            action_dim=action_dim+obs_dim,
             obs_dim=0 if (obs_as_local_cond or obs_as_global_cond) else obs_dim,
             max_n_obs_steps=n_obs_steps,
             fix_obs_steps=True,
@@ -57,6 +57,9 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
         self.num_inference_steps = num_inference_steps
+        
+        # Temporal Assumption for current experiment
+        assert self.obs_as_global_cond, "Only support global conditioning for now"
     
     # ========= inference  ============
     def conditional_sample(self, 
@@ -215,13 +218,13 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             # all zero except first To timesteps
             local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=dtype)
             local_cond[:,:To] = nobs[:,:To]
-            shape = (B, T, Da)
+            shape = (B, T, Da+Do)
             cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
         elif self.obs_as_global_cond:
             # condition throught global feature
             global_cond = nobs[:,:To].reshape(nobs.shape[0], -1)
-            shape = (B, T, Da)
+            shape = (B, T, Da+Do)
             if self.pred_action_steps_only:
                 shape = (B, self.n_action_steps, Da)
             cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
@@ -229,7 +232,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             global_cond = global_cond.repeat(n_samples, 1)
         else:
             # condition through impainting
-            shape = (B, T, Da+Do)
+            shape = (B, T, Da+Do+Do)
             cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
             cond_data[:,:To,Da:] = nobs[:,:To]
@@ -337,13 +340,13 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             # all zero except first To timesteps
             local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=dtype)
             local_cond[:,:To] = nobs[:,:To]
-            shape = (B, T, Da)
+            shape = (B, T, Da+Do)
             cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
         elif self.obs_as_global_cond:
             # condition throught global feature
             global_cond = nobs[:,:To].reshape(nobs.shape[0], -1)
-            shape = (B, T, Da)
+            shape = (B, T, Da+Do)
             if self.pred_action_steps_only:
                 shape = (B, self.n_action_steps, Da)
             cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
@@ -351,7 +354,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             global_cond = global_cond.repeat(n_samples, 1)
         else:
             # condition through impainting
-            shape = (B, T, Da+Do)
+            shape = (B, T, Da+Do+Do)
             cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
             cond_data[:,:To,Da:] = nobs[:,:To]
@@ -577,6 +580,8 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         # unnormalize prediction
         naction_pred = nsample[...,:Da]
         action_pred = self.normalizer['action'].unnormalize(naction_pred)
+        nstate_pred = nsample[..., Da:Da+Do]
+        state_pred = self.normalizer['obs'].unnormalize(nstate_pred)
 
         # get action
         if self.pred_action_steps_only:
@@ -590,7 +595,8 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         
         result = {
             'action': action,
-            'action_pred': action_pred
+            'action_pred': action_pred,
+            'state': state_pred
         }
         if not (self.obs_as_local_cond or self.obs_as_global_cond):
             nobs_pred = nsample[...,Da:]

@@ -3,7 +3,7 @@ defaults:
   - task: pusht_lowdim
 
 name: train_diffusion_unet_lowdim
-_target_: diffusion_policy.workspace.train_diffusion_unet_lowdim_workspace.TrainDiffusionUnetLowdimWorkspace
+_target_: diffusion_policy.workspace.train_diffusion_unet_lowdim_state_estimator_workspace.TrainDiffusionUnetLowdimWorkspace
 
 obs_dim: ${task.obs_dim}
 action_dim: ${task.action_dim}

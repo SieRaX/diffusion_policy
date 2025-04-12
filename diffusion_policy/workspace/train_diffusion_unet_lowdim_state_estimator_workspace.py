@@ -253,8 +253,10 @@ class TrainDiffusionUnetLowdimWorkspace(BaseWorkspace):
                         else:
                             pred_action = result['action_pred']
                         mse = torch.nn.functional.mse_loss(pred_action, gt_action)
+                        state_mse = torch.nn.functional.mse_loss(result['state'], batch['obs'])
                         # log
                         step_log['train_action_mse_error'] = mse.item()
+                        step_log['train_state_mse_error'] = state_mse.item()
                         # release RAM
                         del batch
                         del obs_dict
@@ -262,7 +264,7 @@ class TrainDiffusionUnetLowdimWorkspace(BaseWorkspace):
                         del result
                         del pred_action
                         del mse
-                
+                        del state_mse
                 # checkpoint
                 if (self.epoch % cfg.training.checkpoint_every) == 0:
                     # checkpointing
