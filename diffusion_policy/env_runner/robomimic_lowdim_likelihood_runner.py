@@ -208,21 +208,24 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
             # step env
             env_action = action
             if self.abs_action:
-                env_action = self.undo_transform_action(action[[0]]) # This causes action generation for each timestep which is identical to setting action_horizon=1 --> Needed to be fixed but for the observation, let's keep it for now
+                env_action = self.undo_transform_action(action) 
+            for i in range(env_action.shape[0]):
+                obs, reward, done, info = env.step(env_action[[i]])
+                np_obs_dict = {
+                    'obs': obs[...,:self.n_obs_steps, :].astype(np.float32)
+                }
+                obs_dict = dict_apply(np_obs_dict, 
+                    lambda x: torch.from_numpy(x).to(device=device).unsqueeze(0))
+                rewards.append(reward)
             
-            obs, reward, done, info = env.step(env_action)
-            rewards.append(reward)
+                if enable_render:
+                    frame = env.render(mode='rgb_array')
+                    image_frames.append(frame)
+                    with torch.no_grad():
+                        kl_divergence_drop = policy.kl_divergence_drop(obs_dict)
+                        kl_divergence_drop_frame.append(kl_divergence_drop.detach().cpu().numpy().item())
             
-            if enable_render:
-                frame = env.render(mode='rgb_array')
-                image_frames.append(frame)
-                with torch.no_grad():
-                    kl_divergence_drop = policy.kl_divergence_drop(obs_dict)
-                    kl_divergence_drop_frame.append(kl_divergence_drop.detach().cpu().numpy().item())
-            
-            step += 1
-            step_bar.update(1)
-        
+            step_bar.update(env_action.shape[0])
         step_bar.close()
 
         # Save video with attention visualization
