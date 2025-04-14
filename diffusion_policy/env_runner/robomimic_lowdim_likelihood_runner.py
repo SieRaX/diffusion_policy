@@ -160,7 +160,7 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
                 seed=seed
             )
 
-    def _run_episode(self, env, policy, device, enable_render, prefix, episode_idx, seed):
+    def _run_episode(self, env, policy: DiffusionUnetLowdimPolicy, device, enable_render, prefix, episode_idx, seed):
         obs = env.reset()
         policy.reset()
         
@@ -222,7 +222,8 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
                     frame = env.render(mode='rgb_array')
                     image_frames.append(frame)
                     with torch.no_grad():
-                        kl_divergence_drop = policy.kl_divergence_drop(obs_dict)
+                        # kl_divergence_drop = policy.kl_divergence_drop(obs_dict)
+                        kl_divergence_drop = policy.predict_kl_sample(obs_dict)
                         kl_divergence_drop_frame.append(kl_divergence_drop.detach().cpu().numpy().item())
             
             step_bar.update(env_action.shape[0])

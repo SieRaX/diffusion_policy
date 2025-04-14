@@ -12,6 +12,8 @@ from diffusion_policy.policy.base_lowdim_policy import BaseLowdimPolicy
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from diffusion_policy.model.diffusion.mask_generator import LowdimMaskGenerator
 from diffusion_policy.model.diffusion.kl_divergence import normal_kl, extract
+from diffusion_policy.common.kl_divergenc import scipy_estimator
+import time
 
 class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
     def __init__(self, 
@@ -100,6 +102,91 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         trajectory[condition_mask] = condition_data[condition_mask]        
 
         return trajectory
+    
+    def predict_kl_sample(self, obs_dict: Dict[str, torch.Tensor], n_samples: int = 128*128) -> torch.Tensor:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+        
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+        assert 'obs' in obs_dict
+        assert 'past_action' not in obs_dict # not implemented yet
+        assert obs_dict['obs'].shape[0] == 1 # assert that there is only one observation as input. (For now)
+        assert self.obs_as_global_cond # only support global conditioning (For Now)
+        
+        nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
+        B, _, Do = nobs.shape
+        To = self.n_obs_steps
+        assert Do == self.obs_dim
+        T = self.horizon
+        Da = self.action_dim
+
+        # build input
+        device = self.device
+        dtype = self.dtype
+
+        # handle different ways of passing observation
+        local_cond = None
+        global_cond = None
+        if self.obs_as_local_cond:
+            # condition through local feature
+            # all zero except first To timesteps
+            local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=dtype)
+            local_cond[:,:To] = nobs[:,:To]
+            shape = (B, T, Da+Do)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+        elif self.obs_as_global_cond:
+            # condition throught global feature
+            global_cond = nobs[:,:To].reshape(nobs.shape[0], -1)
+            shape = (B, T, Da+Do)
+            if self.pred_action_steps_only:
+                shape = (B, self.n_action_steps, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            global_cond = global_cond.repeat_interleave(n_samples, dim=0)
+        else:
+            # condition through impainting
+            shape = (B, T, Da+Do+Do)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            cond_data[:,:To,Da:] = nobs[:,:To]
+            cond_mask[:,:To,Da:] = True
+        
+        cond_data = cond_data.repeat(n_samples, 1, 1)
+        cond_mask = cond_mask.repeat(n_samples, 1, 1)
+        
+        # run sampling
+        nsample = self.conditional_sample(
+            cond_data, 
+            cond_mask,
+            local_cond=local_cond,
+            global_cond=global_cond,
+            **self.kwargs)
+        
+        delta_o = 0.01
+        kl_dim_lst = list()
+        for i in range(global_cond.shape[1]):
+            global_cond_perturbed = global_cond.clone()
+            global_cond_perturbed[:,i] = global_cond[:,i] + delta_o
+            
+            perturbed_sample = self.conditional_sample(
+                cond_data, 
+                cond_mask,
+                local_cond=local_cond,
+                global_cond=global_cond_perturbed,
+                **self.kwargs)
+            time_start = time.time()
+            kl_dim = scipy_estimator(nsample.reshape(nsample.shape[0], -1).detach().cpu().numpy(), perturbed_sample.reshape(perturbed_sample.shape[0], -1).detach().cpu().numpy(), k=1)
+            time_end = time.time()
+            elpased_time = time_end - time_start
+            kl_dim_lst.append(kl_dim/delta_o)
+        
+        return torch.tensor(kl_dim_lst, device=device, dtype=dtype).mean()
 
     def predict_kl_grad(self, obs_dict: Dict[str, torch.Tensor], n_samples: int = 128) -> torch.Tensor:
         """
