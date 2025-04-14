@@ -253,7 +253,7 @@ class TrainDiffusionUnetLowdimWorkspace(BaseWorkspace):
                         else:
                             pred_action = result['action_pred']
                         mse = torch.nn.functional.mse_loss(pred_action, gt_action)
-                        state_mse = torch.nn.functional.mse_loss(result['state'], batch['obs'])
+                        state_mse = torch.nn.functional.mse_loss(result['state_pred'], batch['obs'])
                         # log
                         step_log['train_action_mse_error'] = mse.item()
                         step_log['train_state_mse_error'] = state_mse.item()

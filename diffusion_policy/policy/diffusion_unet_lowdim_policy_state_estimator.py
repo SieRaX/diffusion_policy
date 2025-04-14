@@ -197,7 +197,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         
         assert 'obs' in obs_dict
         assert 'past_action' not in obs_dict # not implemented yet
-        assert obs_dict['obs'].shape[0] == 1 # assert that there is only one observation as input. (For now)
+        assert self.obs_as_global_cond # only support global conditioning (For Now)
         
         nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
         B, _, Do = nobs.shape
@@ -229,7 +229,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
                 shape = (B, self.n_action_steps, Da)
             cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
-            global_cond = global_cond.repeat(n_samples, 1)
+            global_cond = global_cond.repeat_interleave(n_samples, dim=0)
         else:
             # condition through impainting
             shape = (B, T, Da+Do+Do)
@@ -238,8 +238,8 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             cond_data[:,:To,Da:] = nobs[:,:To]
             cond_mask[:,:To,Da:] = True
         
-        cond_data = cond_data.repeat(n_samples, 1, 1)
-        cond_mask = cond_mask.repeat(n_samples, 1, 1)
+        cond_data = cond_data.repeat_interleave(n_samples, dim=0)
+        cond_mask = cond_mask.repeat_interleave(n_samples, dim=0)
             
         model = self.model
         scheduler = self.noise_scheduler
@@ -272,12 +272,14 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             kl = kl.mean(dim=[1,2])
             valid_mask = kl <= 1000
             num_anomaly = len(valid_mask) - valid_mask.sum()
-            kl_mean = kl[valid_mask].mean() if valid_mask.any() else torch.zeros_like(kl).mean()
+            if num_anomaly > 0:
+                    assert False, "num_anomaly > 0"
+                    
+            kl_mean = kl.reshape(B, n_samples).mean(dim=1).unsqueeze(1)
+            # kl_mean = kl[valid_mask].mean() if valid_mask.any() else torch.zeros_like(kl).mean()
             kl_lst.append(kl_mean)
-            num_anomaly_lst.append(num_anomaly)
-        num_anomaly = torch.tensor(num_anomaly_lst, device=device, dtype=dtype)
-        kl_lst = torch.tensor(kl_lst, device=device, dtype=dtype)
-        return kl_lst.mean(), num_anomaly.mean()
+        kl_lst = torch.cat(kl_lst, dim=-1).squeeze()
+        return kl_lst, None
         
         timesteps = torch.randint(
             0, self.noise_scheduler.config.num_train_timesteps, 
@@ -318,7 +320,6 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         
         assert 'obs' in obs_dict
         assert 'past_action' not in obs_dict # not implemented yet
-        assert obs_dict['obs'].shape[0] == 1 # assert that there is only one observation as input. (For now)
         assert self.obs_as_global_cond # only support global conditioning (For Now)
         
         nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
@@ -351,7 +352,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
                 shape = (B, self.n_action_steps, Da)
             cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
-            global_cond = global_cond.repeat(n_samples, 1)
+            global_cond = global_cond.repeat_interleave(n_samples, dim=0)
         else:
             # condition through impainting
             shape = (B, T, Da+Do+Do)
@@ -360,17 +361,11 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             cond_data[:,:To,Da:] = nobs[:,:To]
             cond_mask[:,:To,Da:] = True
         
-        cond_data = cond_data.repeat(n_samples, 1, 1)
-        cond_mask = cond_mask.repeat(n_samples, 1, 1)
+        cond_data = cond_data.repeat_interleave(n_samples, dim=0)
+        cond_mask = cond_mask.repeat_interleave(n_samples, dim=0)
             
         model = self.model
         scheduler = self.noise_scheduler
-
-        trajectory = torch.randn(
-            size=cond_data.shape, 
-            dtype=cond_data.dtype,
-            device=cond_data.device,
-            generator=None)
         
         # run sampling
         nsample = self.conditional_sample(
@@ -380,7 +375,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             global_cond=global_cond,
             **self.kwargs)
         
-        delta_o = 0.01
+        delta_o = 0.1
         kl_dim_lst = list()
         for i in range(global_cond.shape[1]):
             global_cond_perturbed = global_cond.clone()
@@ -404,9 +399,13 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
                 kl = kl.mean(dim=[1,2])
                 valid_mask = kl <= 1000
                 num_anomaly = len(valid_mask) - valid_mask.sum()
-                kl_mean = kl[valid_mask].mean() if valid_mask.any() else torch.zeros_like(kl).mean()
+                if num_anomaly > 0:
+                    assert False, "num_anomaly > 0"
+                    
+                kl_mean = kl.reshape(B, n_samples).mean(dim=1).unsqueeze(1)
+                # kl_mean = kl[valid_mask].mean() if valid_mask.any() else torch.zeros_like(kl).mean()
                 kl_lst.append(kl_mean)
-            kl_dim_lst.append(torch.tensor(kl_lst, device=device, dtype=dtype).mean())
+            kl_dim_lst.append(torch.cat(kl_lst, dim=1).mean(dim=1))
         
             
             # # Sample a random timestep for each image
@@ -436,11 +435,12 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             # # If you need to keep the original tensor structure, but with proper mean:
             # kl = torch.where(kl > 1000, torch.zeros_like(kl), kl)
             # kl_dim_lst.append(kl_mean)
-        kl_dim_lst = torch.tensor(kl_dim_lst, device=device, dtype=dtype)
+        kl_dim_lst = torch.stack(kl_dim_lst, dim=1)
+        kl_dim_lst = kl_dim_lst.mean(dim=-1)
         
         original_kl_divergence, _ = self.predict_kl_divergence(obs_dict, n_samples=n_samples)
         
-        difference= (kl_dim_lst - original_kl_divergence).mean()/delta_o
+        difference = (kl_dim_lst - original_kl_divergence)/delta_o
         return difference
     
     def p_mean_variance(self, x_t, t: int, model_output):
@@ -586,17 +586,19 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         # get action
         if self.pred_action_steps_only:
             action = action_pred
+            state = state_pred
         else:
             start = To
             if self.oa_step_convention:
                 start = To - 1
             end = start + self.n_action_steps
             action = action_pred[:,start:end]
-        
+            state = state_pred[:,start:]
         result = {
             'action': action,
             'action_pred': action_pred,
-            'state': state_pred
+            'state': state,
+            'state_pred': state_pred
         }
         if not (self.obs_as_local_cond or self.obs_as_global_cond):
             nobs_pred = nsample[...,Da:]
