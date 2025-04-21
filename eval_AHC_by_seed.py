@@ -25,11 +25,11 @@ from omegaconf import OmegaConf
 @click.option('-c', '--checkpoint', required=True)
 @click.option('-o', '--output_dir', required=True)
 @click.option('-d', '--device', default='cuda:0')
-@click.option('-n', '--n_action_steps', default=8)
 @click.option('-v', '--n_test_vis', default=4)
+@click.option('-seed', '--seed', default=10000)
 @click.option('-t', '--max_steps', default=70)
 @click.option('-r', '--env_runner', default='diffusion_policy.env_runner.robomimic_lowdim_likelihood_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner')
-def main(checkpoint, output_dir, device, n_action_steps, n_test_vis, max_steps, env_runner):
+def main(checkpoint, output_dir, device, n_test_vis, seed, max_steps, env_runner):
     if os.path.exists(output_dir):
         click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
         shutil.rmtree(output_dir)
@@ -38,19 +38,18 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test_vis, max_steps, 
     # load checkpoint
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['cfg']
-    cfg.policy.n_action_steps = n_action_steps
+    cfg.policy.n_action_steps = cfg.policy.horizon - cfg.policy.n_obs_steps
     cfg.task.env_runner.n_test = n_test_vis
     cfg.task.env_runner.n_test_vis = n_test_vis
-    # cfg.task.env_runner.n_train = 10
-    # cfg.task.env_runner.n_train_vis = 10
+    # cfg.task.env_runner.n_train = 2
+    # cfg.task.env_runner.n_train_vis = 1
     # Change the noise_scheduler to ours
     cfg.policy.noise_scheduler._target_ = 'diffusion_policy.schedulers.scheduling_ddpm.DDPMScheduler'
     # Change the env runner to ours
-    # cfg.task.env_runner._target_ = 'diffusion_policy.env_runner.pusht_keypoints_likelihood_runner.PushTKeypointsLikelihoodRunner'
+    # cfg.task.env_runner._target_ = 'diffusion_policy.env_runner.pusht_keypoints_likelihood_runner.PushTKeypointsLikelihoodRunner' # Have to change to pust ahc runner...
+    # cfg.task.env_runner._target_ = 'diffusion_policy.env_runner.robomimic_lowdim_AHC_runner_by_seed.RobomimicLowdimAHCRunner'
     cfg.task.env_runner._target_ = env_runner
     cfg.task.env_runner.max_steps = max_steps
-    # cfg.task.env_runner.test_start_seed = 100050
-    
     cls = hydra.utils.get_class(cfg._target_)
     workspace = cls(cfg, output_dir=output_dir)
     workspace: BaseWorkspace
@@ -69,7 +68,7 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test_vis, max_steps, 
     env_runner = hydra.utils.instantiate(
         cfg.task.env_runner,
         output_dir=output_dir)
-    runner_log = env_runner.run(policy)
+    runner_log = env_runner.run(policy, seed=seed)
     
     # dump log to json
     json_log = dict()

@@ -46,7 +46,7 @@ def main(checkpoint, output_dir, device, n_test_vis, c_att):
     # Change the env runner to ours
     # cfg.task.env_runner._target_ = 'diffusion_policy.env_runner.pusht_keypoints_likelihood_runner.PushTKeypointsLikelihoodRunner' # Have to change to pust ahc runner...
     cfg.task.env_runner._target_ = 'diffusion_policy.env_runner.robomimic_lowdim_AHC_runner.RobomimicLowdimAHCRunner'
-    cfg.task.env_runner.max_steps = 300
+    cfg.task.env_runner.max_steps = 70
     cls = hydra.utils.get_class(cfg._target_)
     workspace = cls(cfg, output_dir=output_dir)
     workspace: BaseWorkspace

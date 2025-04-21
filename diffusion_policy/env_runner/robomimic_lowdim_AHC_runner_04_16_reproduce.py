@@ -280,7 +280,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
             if self.abs_action:
                 env_action = self.undo_transform_action(action) 
             
-            env_action = env_action[:horizon_idx+1]
+            env_action = env_action[:horizon_idx]
             action_horizon_length_lst.append(horizon_idx)
             for i in range(env_action.shape[0]):
                 obs, reward, done, info = env.step(env_action[[i]])

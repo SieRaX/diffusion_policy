@@ -103,6 +103,47 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
 
         return trajectory
     
+    def conditional_sample_remaining_action(self, 
+            condition_data, condition_mask, remaining_action,
+            local_cond=None, global_cond=None,
+            generator=None,
+            # keyword arguments to scheduler.step
+            **kwargs
+            ):
+        model = self.model
+        scheduler = self.noise_scheduler
+
+        trajectory = torch.randn(
+            size=condition_data.shape, 
+            dtype=condition_data.dtype,
+            device=condition_data.device,
+            generator=generator)
+        
+        trajectory[:, :remaining_action.shape[1]] = remaining_action
+    
+        # set step values
+        scheduler.set_timesteps(self.num_inference_steps)
+
+        for t in scheduler.timesteps:
+            # 1. apply conditioning
+            trajectory[condition_mask] = condition_data[condition_mask]
+
+            # 2. predict model output
+            model_output = model(trajectory, t, 
+                local_cond=local_cond, global_cond=global_cond)
+
+            # 3. compute previous image: x_t -> x_t-1
+            trajectory = scheduler.step(
+                model_output, t, trajectory, 
+                generator=generator,
+                **kwargs
+                ).prev_sample
+        
+        # finally make sure conditioning is enforced
+        trajectory[condition_mask] = condition_data[condition_mask]        
+
+        return trajectory
+    
     def predict_kl_sample(self, obs_dict: Dict[str, torch.Tensor], n_samples: int = 128*128) -> torch.Tensor:
         """
         obs_dict: must include "obs" key
@@ -660,6 +701,100 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
         nsample = self.conditional_sample(
             cond_data, 
             cond_mask,
+            local_cond=local_cond,
+            global_cond=global_cond,
+            **self.kwargs)
+        
+        # unnormalize prediction
+        naction_pred = nsample[...,:Da]
+        action_pred = self.normalizer['action'].unnormalize(naction_pred)
+        nstate_pred = nsample[..., Da:Da+Do]
+        state_pred = self.normalizer['obs'].unnormalize(nstate_pred)
+
+        # get action
+        if self.pred_action_steps_only:
+            action = action_pred
+            state = state_pred
+        else:
+            start = To
+            if self.oa_step_convention:
+                start = To - 1
+            end = start + self.n_action_steps
+            action = action_pred[:,start:end]
+            state = state_pred[:,start:]
+        result = {
+            'action': action,
+            'action_pred': action_pred,
+            'state': state,
+            'state_pred': state_pred
+        }
+        if not (self.obs_as_local_cond or self.obs_as_global_cond):
+            nobs_pred = nsample[...,Da:]
+            obs_pred = self.normalizer['obs'].unnormalize(nobs_pred)
+            action_obs_pred = obs_pred[:,start:end]
+            result['action_obs_pred'] = action_obs_pred
+            result['obs_pred'] = obs_pred
+        return result
+    
+    def predict_action_remaining_actions(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+
+        assert 'obs' in obs_dict
+        assert 'past_action' not in obs_dict # not implemented yet
+        
+        if obs_dict['remaining_action'] is None:
+            return self.predict_action(obs_dict)
+        
+        nobs = self.normalizer['obs'].normalize(obs_dict['obs'])
+        naction = self.normalizer['action'].normalize(obs_dict['remaining_action'])
+        nstate = self.normalizer['obs'].normalize(obs_dict['remaining_state'])
+        naction = torch.cat([naction, nstate], dim=-1)
+        
+        B, _, Do = nobs.shape
+        To = self.n_obs_steps
+        assert Do == self.obs_dim
+        T = self.horizon
+        Da = self.action_dim
+
+        # build input
+        device = self.device
+        dtype = self.dtype
+
+        # handle different ways of passing observation
+        local_cond = None
+        global_cond = None
+        if self.obs_as_local_cond:
+            # condition through local feature
+            # all zero except first To timesteps
+            local_cond = torch.zeros(size=(B,T,Do), device=device, dtype=dtype)
+            local_cond[:,:To] = nobs[:,:To]
+            shape = (B, T, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+        elif self.obs_as_global_cond:
+            # condition throught global feature
+            global_cond = nobs[:,:To].reshape(nobs.shape[0], -1)
+            shape = (B, T, Da+Do)
+            if self.pred_action_steps_only:
+                shape = (B, self.n_action_steps, Da)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+        else:
+            # condition through impainting
+            shape = (B, T, Da+Da+Do)
+            cond_data = torch.zeros(size=shape, device=device, dtype=dtype)
+            cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
+            cond_data[:,:To,Da:] = nobs[:,:To]
+            cond_mask[:,:To,Da:] = True
+
+        # run sampling
+        nsample = self.conditional_sample_remaining_action(
+            cond_data, 
+            cond_mask,
+            remaining_action=naction,
             local_cond=local_cond,
             global_cond=global_cond,
             **self.kwargs)

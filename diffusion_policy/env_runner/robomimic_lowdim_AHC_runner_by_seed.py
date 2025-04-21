@@ -1,3 +1,5 @@
+# This runner is used to evaluate the AHC policy by seed.
+# It fixes the seed and gradually increases the c_att value to have average horizon length from 1 to 14
 import os
 import wandb
 import numpy as np
@@ -127,84 +129,84 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         
         self.graped_object = graped_object
 
-    def run(self, policy: DiffusionUnetLowdimPolicy, c_att=0.01):
+    def run(self, policy: DiffusionUnetLowdimPolicy, seed=100000):
         device = policy.device
         dtype = policy.dtype
         
         all_video_paths = []
         all_rewards = []
-        all_seeds = []
         all_prefixs = []
         all_action_horizon_average_lengths = []
-        # Train episodes
-        with h5py.File(self.dataset_path, 'r') as f:
-            for i in range(self.n_train):
-                train_idx = self.train_start_idx + i
-                enable_render = i < self.n_train_vis
-                init_state = f[f'data/demo_{train_idx}/states'][0]
-                
+        all_eval_lengths = []
+        
+        c_att = 0.001
+        # c_att = 0.03
+        enable_render = True
+        d_c_att = 0.005
+        
+        for eval_length in range(1, 14):
+            total_iteration = 0
+            while True:
+                print(f"[Start]finding eval_length: {eval_length} at c_att: {c_att}")
                 env = self.make_env()
-                env.env.env.init_state = init_state
-                
+                env.env.env.init_state = None
+                env.seed(seed)
                 max_reward, output_path, action_horizon_average_length = self._run_episode(
                     env=env,
                     policy=policy,
                     device=device,
                     enable_render=enable_render,
-                    prefix='train',
-                    episode_idx=i,
-                    seed=train_idx,
+                    prefix='test',
+                    episode_idx=eval_length,
+                    seed=seed,
                     c_att=c_att
                 )
-                all_video_paths.append(output_path)
-                all_rewards.append(max_reward)
-                all_seeds.append(train_idx)
-                all_prefixs.append('train/')
-                all_action_horizon_average_lengths.append(action_horizon_average_length)
-                
-        # Test episodes
-        for i in range(self.n_test):
-            seed = self.test_start_seed + i
-            enable_render = i < self.n_test_vis
-            
-            env = self.make_env()
-            env.env.env.init_state = None
-            env.seed(seed)
-            print(f"test episode {i+1} with seed {seed}")
-            
-            max_reward, output_path, action_horizon_average_length = self._run_episode(
-                env=env,
-                policy=policy,
-                device=device,
-                enable_render=enable_render,
-                prefix='test',
-                episode_idx=i,
-                seed=seed,
-                c_att=c_att
-            )
-            all_video_paths.append(output_path)
-            all_rewards.append(max_reward)
-            all_seeds.append(seed)
-            all_prefixs.append('test/')
-            all_action_horizon_average_lengths.append(action_horizon_average_length)
+                print(f"c_att: {c_att}, eval_length: {eval_length}, action_horizon_average_length: {action_horizon_average_length}")
+                total_iteration += 1
+                if eval_length - 0.2 <= action_horizon_average_length <= eval_length + 0.2:
+                    d_c_att = 0.005
+                    c_att = c_att + d_c_att
+                    
+                    all_video_paths.append(output_path)
+                    all_rewards.append(max_reward)
+                    all_prefixs.append('test/')
+                    all_action_horizon_average_lengths.append(action_horizon_average_length)
+                    all_eval_lengths.append(eval_length)
+                    print(f"[Finished Evaluation] eval_length: {eval_length}")
+                    break
+                elif total_iteration > 10:
+                    print(f"[Warning] eval_length: {eval_length}, action_horizon_average_length: {action_horizon_average_length} max iteration reached")
+                    all_video_paths.append(output_path)
+                    all_rewards.append(-1.0)
+                    all_prefixs.append('test/')
+                    all_action_horizon_average_lengths.append(-1.0)
+                    all_eval_lengths.append(eval_length)
+                    break
+                elif action_horizon_average_length < eval_length - 0.2:
+                    d_c_att = 0.5 * d_c_att
+                    c_att = c_att + d_c_att
+                else:
+                    d_c_att = 0.5 * d_c_att
+                    c_att = c_att - d_c_att
+
             
         # log
         max_rewards = collections.defaultdict(list)
         log_data = dict()
         for i in range(len(all_rewards)): # 여기 zip으로 바꾸자
-            seed = all_seeds[i]
+            eval_length = all_eval_lengths[i]
             prefix = all_prefixs[i]
             max_reward = np.max(all_rewards[i])
             max_rewards[prefix].append(max_reward)
-            log_data[prefix+f'sim_max_reward_{seed}'] = max_reward
+            log_data[prefix+f'sim_max_reward_{eval_length}'] = max_reward
 
             # visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
                 video_path = str(video_path)
                 sim_video = wandb.Video(video_path)
-                log_data[prefix+f'sim_video_{seed}'] = sim_video
-                log_data[prefix+f'sim_action_horizon_average_length_{seed}'] = all_action_horizon_average_lengths[i]
+                log_data[prefix+f'sim_video_{eval_length}'] = sim_video
+                log_data[prefix+f'sim_action_horizon_average_length_{eval_length}'] = all_action_horizon_average_lengths[i]
 
         # log aggregate metrics
         for prefix, value in max_rewards.items():
@@ -231,7 +233,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         
         step_bar = tqdm.tqdm(
             total=self.max_steps, 
-            desc=f"{prefix} Episode {episode_idx+1}", 
+            desc=f"{prefix} Finding eval_length {episode_idx}", 
             leave=False,
             mininterval=self.tqdm_interval_sec
         )
@@ -281,7 +283,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                 env_action = self.undo_transform_action(action) 
             
             env_action = env_action[:horizon_idx+1]
-            action_horizon_length_lst.append(horizon_idx)
+            action_horizon_length_lst.append(horizon_idx+1)
             for i in range(env_action.shape[0]):
                 obs, reward, done, info = env.step(env_action[[i]])
                 

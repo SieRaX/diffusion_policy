@@ -4,6 +4,9 @@ import numpy as np
 import scipy.interpolate as si
 import scipy.spatial.transform as st
 
+def quat2matrix(quat):
+    return st.Rotation.from_quat(quat).as_matrix()
+
 def rotation_distance(a: st.Rotation, b: st.Rotation) -> float:
     return (b * a.inv()).magnitude()
 

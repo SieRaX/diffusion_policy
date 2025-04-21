@@ -1,3 +1,5 @@
+# This is a setting that shows good results in horizon 3 and bad results in horizon 14, which is exactly what we wanted.
+# Refer eval_jumping_disturbance_horizon_3_num_distrub_1_pos_0.03_gripper_dir_near_gripper_0.025_200episode
 import os
 import wandb
 import numpy as np
@@ -17,7 +19,7 @@ from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper
 from diffusion_policy.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
 from diffusion_policy.model.common.rotation_transformer import RotationTransformer
-from diffusion_policy.policy.diffusion_unet_lowdim_policy_state_estimator import DiffusionUnetLowdimPolicy
+from diffusion_policy.policy.diffusion_unet_lowdim_policy import DiffusionUnetLowdimPolicy
 from diffusion_policy.common.pytorch_util import dict_apply
 from diffusion_policy.env_runner.base_lowdim_runner import BaseLowdimRunner
 from diffusion_policy.env.robomimic.robomimic_lowdim_wrapper import RobomimicLowdimWrapper
@@ -37,7 +39,7 @@ def create_env(env_meta, obs_keys):
     )
     return env
 
-class RobomimicLowdimAHCRunner(BaseLowdimRunner):
+class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
     def __init__(self, 
             output_dir,
             dataset_path,
@@ -127,7 +129,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         
         self.graped_object = graped_object
 
-    def run(self, policy: DiffusionUnetLowdimPolicy, c_att=0.01):
+    def run(self, policy: DiffusionUnetLowdimPolicy):
         device = policy.device
         dtype = policy.dtype
         
@@ -136,31 +138,30 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         all_seeds = []
         all_prefixs = []
         all_action_horizon_average_lengths = []
-        # Train episodes
-        with h5py.File(self.dataset_path, 'r') as f:
-            for i in range(self.n_train):
-                train_idx = self.train_start_idx + i
-                enable_render = i < self.n_train_vis
-                init_state = f[f'data/demo_{train_idx}/states'][0]
+        # # Train episodes
+        # with h5py.File(self.dataset_path, 'r') as f:
+        #     for i in range(self.n_train):
+        #         train_idx = self.train_start_idx + i
+        #         enable_render = i < self.n_train_vis
+        #         init_state = f[f'data/demo_{train_idx}/states'][0]
                 
-                env = self.make_env()
-                env.env.env.init_state = init_state
+        #         env = self.make_env()
+        #         env.env.env.init_state = init_state
                 
-                max_reward, output_path, action_horizon_average_length = self._run_episode(
-                    env=env,
-                    policy=policy,
-                    device=device,
-                    enable_render=enable_render,
-                    prefix='train',
-                    episode_idx=i,
-                    seed=train_idx,
-                    c_att=c_att
-                )
-                all_video_paths.append(output_path)
-                all_rewards.append(max_reward)
-                all_seeds.append(train_idx)
-                all_prefixs.append('train/')
-                all_action_horizon_average_lengths.append(action_horizon_average_length)
+        #         max_reward, output_path, action_horizon_average_length = self._run_episode(
+        #             env=env,
+        #             policy=policy,
+        #             device=device,
+        #             enable_render=enable_render,
+        #             prefix='train',
+        #             episode_idx=i,
+        #             seed=train_idx
+        #         )
+        #         all_video_paths.append(output_path)
+        #         all_rewards.append(max_reward)
+        #         all_seeds.append(train_idx)
+        #         all_prefixs.append('train/')
+        #         all_action_horizon_average_lengths.append(action_horizon_average_length)
                 
         # Test episodes
         for i in range(self.n_test):
@@ -179,8 +180,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                 enable_render=enable_render,
                 prefix='test',
                 episode_idx=i,
-                seed=seed,
-                c_att=c_att
+                seed=seed
             )
             all_video_paths.append(output_path)
             all_rewards.append(max_reward)
@@ -197,14 +197,14 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
             max_reward = np.max(all_rewards[i])
             max_rewards[prefix].append(max_reward)
             log_data[prefix+f'sim_max_reward_{seed}'] = max_reward
-
+            log_data[prefix+f'sim_action_horizon_average_length_{seed}'] = all_action_horizon_average_lengths[i]
+            
             # visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
                 video_path = str(video_path)
                 sim_video = wandb.Video(video_path)
                 log_data[prefix+f'sim_video_{seed}'] = sim_video
-                log_data[prefix+f'sim_action_horizon_average_length_{seed}'] = all_action_horizon_average_lengths[i]
 
         # log aggregate metrics
         for prefix, value in max_rewards.items():
@@ -213,20 +213,28 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
             log_data[name] = value
 
         return log_data
-            
 
-    def _run_episode(self, env, policy:DiffusionUnetLowdimPolicy, device, enable_render, prefix, episode_idx, c_att, seed=42):
+    def _run_episode(self, env, policy: DiffusionUnetLowdimPolicy, device, enable_render, prefix, episode_idx, seed=42):
         np.random.seed(seed)
         
         obs = env.reset()
         policy.reset()
+        robot_eef_pos = env.env.env.get_observation()['robot0_eef_pos']
+        
+        # state = env.env.env.get_state()
+        # object_pos_quat = state['states'][10:17]
+        # direction = -object_pos_quat[0:1]/np.linalg.norm(object_pos_quat[0:1])
+        # direction = np.array([*direction, 0.0])
         
         image_frames = []
         kl_divergence_drop_frame = []
+        gripper_speed_frame = []
         sample_triggered_lst = []
         rewards = []
         done = False
         reward = 0 # for lift only, for Square, the code might be wrong.
+        max_number_of_disturbance = 1
+        number_of_disturbance = 0
         action_horizon_length_lst = []
         
         step_bar = tqdm.tqdm(
@@ -259,17 +267,6 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                 lambda x: x.detach().to('cpu').squeeze(0).numpy())
             
             action = np_action_dict['action'][:,self.n_latency_steps:]
-            state = np_action_dict['state'][:,self.n_latency_steps:]
-            np_obs_dict_AHC = {'obs': np.stack([state[:-1], state[1:]], axis=1)}
-            obs_dict_AHC = dict_apply(np_obs_dict_AHC, lambda x: torch.from_numpy(x).to(device=device))
-            
-            with torch.no_grad():
-                kl_divergence_drop = policy.kl_divergence_drop(obs_dict_AHC)
-                kl_divergence_cumsum = torch.cumsum(kl_divergence_drop, dim=-1)
-                indices = torch.where(kl_divergence_cumsum > c_att)[0]
-                horizon_idx = indices[0].item() if len(indices) > 0 else kl_divergence_cumsum.shape[0]
-            
-            
             if not np.all(np.isfinite(action)):
                 print(action)
                 raise RuntimeError("Nan or Inf action")
@@ -278,15 +275,17 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
             # step env
             env_action = action
             if self.abs_action:
-                env_action = self.undo_transform_action(action) 
-            
-            env_action = env_action[:horizon_idx+1]
-            action_horizon_length_lst.append(horizon_idx)
+                env_action = self.undo_transform_action(action)
+                
+            # Get first index where gripper closes (action > 0.9)
+            # close_gripper_idx = np.where(env_action[:, -1] > 0.9)[0]
+            # close_gripper_idx = close_gripper_idx[0] if len(close_gripper_idx) > 0 else env_action.shape[0]+1
+            action_horizon_length_lst.append(env_action.shape[0])
             for i in range(env_action.shape[0]):
                 obs, reward, done, info = env.step(env_action[[i]])
                 
-                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.05:
-                    speed = 0.0017
+                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.025 and number_of_disturbance < max_number_of_disturbance:
+                    speed = 0.03
                     # if np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
                     direction = quat2matrix(env.env.env.get_observation()['robot0_eef_quat'])[0:2, 0]
                     direction = direction/np.linalg.norm(direction)
@@ -296,6 +295,19 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                     new_state = {k:v for k,v in deepcopy(state).items() if k != 'model'} # If model is copied the robot could not open the gripper.
                     new_state['states'][10:17] = object_pos_quat + np.array([*speed*direction, 0.0, 0.0, 0, 0, 0])
                     env.env.env.reset_to(new_state)
+                    number_of_disturbance += 1
+                # if not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
+                #     # move the object with velocity inversely proportional to the distance to the gripper
+                #     # object_to_gripper_dist = np.linalg.norm(env.env.env.get_observation()['object'][7:10])
+                #     # speed = 0.0005 / (1 + 1*object_to_gripper_dist)
+                #     speed = 0.001
+                #     # Move object
+                #     state = env.env.env.get_state()
+                #     object_pos_quat = state['states'][10:17]
+                #     new_state = {k:v for k,v in deepcopy(state).items() if k != 'model'} # If model is copied the robot could not open the gripper.
+                #     new_state['states'][10:17] = object_pos_quat + np.array([speed, 0.0, 0.0, 0, 0, 0, 0])
+                #     env.env.env.reset_to(new_state)
+
                 
                 np_obs_dict = {
                     'obs': obs[...,:self.n_obs_steps, :].astype(np.float32)
@@ -309,10 +321,14 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                     image_frames.append(frame)
                     sample_triggered_lst.append(i==0)
                     with torch.no_grad():
-                        kl_divergence_drop = policy.kl_divergence_drop(obs_dict)
-                        kl_divergence_drop_frame.append(kl_divergence_drop.detach().cpu().numpy().item())
-                        # kl_divergence_drop_frame.append(0)
-            
+                        # kl_divergence_drop = policy.kl_divergence_drop(obs_dict)
+                        # kl_divergence_drop = policy.predict_kl_sample(obs_dict)
+                        # kl_divergence_drop = policy.predict_kl_sample(obs_dict)
+                        # kl_divergence_drop_frame.append(kl_divergence_drop.detach().cpu().numpy().item())
+                        kl_divergence_drop_frame.append(env_action[i, -1])
+                        next_gripper_pos = env.env.env.get_observation()['robot0_eef_pos']
+                        gripper_speed_frame.append(np.linalg.norm(robot_eef_pos - next_gripper_pos))
+                        robot_eef_pos = next_gripper_pos
             step_bar.update(env_action.shape[0])
         step_bar.close()
 
@@ -321,24 +337,35 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
             output_path = self._save_visualization(
                 image_frames=image_frames,
                 kl_divergence_drop_frame=kl_divergence_drop_frame,
+                gripper_speed_frame = gripper_speed_frame,
                 prefix=prefix,
                 episode_idx=episode_idx,
                 sample_triggered_lst=sample_triggered_lst
             )
         else:
             output_path = None
-            
+
         return np.max(env.get_attr('reward')), output_path, np.mean(action_horizon_length_lst)
 
-    def _save_visualization(self, image_frames, kl_divergence_drop_frame, prefix, episode_idx, sample_triggered_lst):
+    def _save_visualization(self, image_frames, kl_divergence_drop_frame, gripper_speed_frame, prefix, episode_idx, sample_triggered_lst):
         # Create the attention graph
-        fig, ax = plt.subplots(figsize=(4, 3))
+        fig, ax1 = plt.subplots(figsize=(4, 3))
+        
+        # Plot KL divergence on primary y-axis
         kl_divergence_drop_data = np.array(kl_divergence_drop_frame)
         time_steps = np.arange(len(kl_divergence_drop_data))
-        ax.plot(time_steps, kl_divergence_drop_data, 'b-', linewidth=1)
-        ax.set_xlabel('Time Step')
-        ax.set_ylabel('KL Divergence Drop')
-        ax.grid(True)
+        ax1.plot(time_steps, kl_divergence_drop_data, 'b-', linewidth=1, label='KL Divergence')
+        ax1.set_xlabel('Time Step')
+        ax1.tick_params(axis='y', labelcolor='b')
+        
+        # Plot gripper speed on secondary y-axis
+        ax2 = ax1.twinx()
+        ax2.plot(time_steps, gripper_speed_frame, 'r-', linewidth=1, label='Gripper Speed')
+        ax2.tick_params(axis='y', labelcolor='r')
+        
+        # Add grid and adjust layout
+        ax1.grid(True)
+        fig.tight_layout()
         
         # Get graph dimensions
         fig.canvas.draw()
@@ -354,11 +381,11 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                             position=2)
         graph_frames = []
         for t in range(len(kl_divergence_drop_data)):
-            ax.scatter(time_steps, kl_divergence_drop_data, color='blue', s=0)
-            ax.scatter(t, kl_divergence_drop_data[t], color='red', s=50)
+            ax1.scatter(time_steps, kl_divergence_drop_data, color='blue', s=0)
+            ax1.scatter(t, kl_divergence_drop_data[t], color='red', s=50)
             
             if sample_triggered_lst[t]:
-                ax.scatter(t, 0, color='green', s=20, marker='x')
+                ax1.scatter(t, 0, color='green', s=20, marker='x')
             
             fig.canvas.draw()
             graph_img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
