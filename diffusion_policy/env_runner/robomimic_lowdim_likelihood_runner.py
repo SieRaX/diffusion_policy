@@ -119,6 +119,9 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
         
         all_video_paths = []
         all_rewards = []
+        all_seeds = []
+        all_prefixs = []
+        all_action_horizon_average_lengths = []
         
         # Train episodes
         with h5py.File(self.dataset_path, 'r') as f:
@@ -130,7 +133,7 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
                 env = self.make_env()
                 env.env.env.init_state = init_state
                 
-                self._run_episode(
+                max_reward, output_path, action_horizon_average_length = self._run_episode(
                     env=env,
                     policy=policy,
                     device=device,
@@ -139,6 +142,11 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
                     episode_idx=i,
                     seed=train_idx
                 )
+                all_video_paths.append(output_path)
+                all_rewards.append(max_reward)
+                all_seeds.append(train_idx)
+                all_prefixs.append('train/')
+                all_action_horizon_average_lengths.append(action_horizon_average_length)
         
         # Test episodes
         for i in range(self.n_test):
@@ -150,7 +158,7 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
             env.seed(seed)
             print(f"test episode {i+1} with seed {seed}")
             
-            self._run_episode(
+            max_reward, output_path, action_horizon_average_length = self._run_episode(
                 env=env,
                 policy=policy,
                 device=device,
@@ -159,6 +167,37 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
                 episode_idx=i,
                 seed=seed
             )
+            all_video_paths.append(output_path)
+            all_rewards.append(max_reward)
+            all_seeds.append(seed)
+            all_prefixs.append('test/')
+            all_action_horizon_average_lengths.append(action_horizon_average_length)
+        
+        # log
+        max_rewards = collections.defaultdict(list)
+        log_data = dict()
+        for i in range(len(all_rewards)): # 여기 zip으로 바꾸자
+            seed = all_seeds[i]
+            prefix = all_prefixs[i]
+            max_reward = np.max(all_rewards[i])
+            max_rewards[prefix].append(max_reward)
+            log_data[prefix+f'sim_max_reward_{seed}'] = max_reward
+            log_data[prefix+f'sim_action_horizon_average_length_{seed}'] = all_action_horizon_average_lengths[i]
+            
+            # visualize sim
+            video_path = all_video_paths[i]
+            if video_path is not None:
+                video_path = str(video_path)
+                sim_video = wandb.Video(video_path)
+                log_data[prefix+f'sim_video_{seed}'] = sim_video
+
+        # log aggregate metrics
+        for prefix, value in max_rewards.items():
+            name = prefix+'mean_score'
+            value = np.mean(value)
+            log_data[name] = value
+
+        return log_data
 
     def _run_episode(self, env, policy: DiffusionUnetLowdimPolicy, device, enable_render, prefix, episode_idx, seed):
         obs = env.reset()
@@ -168,7 +207,7 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
         kl_divergence_drop_frame = []
         rewards = []
         done = False
-        
+        action_horizon_length_lst = []
         step = 0
         step_bar = tqdm.tqdm(
             total=self.max_steps, 
@@ -209,6 +248,7 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
             env_action = action
             if self.abs_action:
                 env_action = self.undo_transform_action(action) 
+            action_horizon_length_lst.append(env_action.shape[0])
             for i in range(env_action.shape[0]):
                 obs, reward, done, info = env.step(env_action[[i]])
                 np_obs_dict = {
@@ -222,8 +262,8 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
                     frame = env.render(mode='rgb_array')
                     image_frames.append(frame)
                     with torch.no_grad():
-                        # kl_divergence_drop = policy.kl_divergence_drop(obs_dict)
-                        kl_divergence_drop = policy.predict_kl_sample(obs_dict)
+                        kl_divergence_drop = policy.kl_divergence_drop(obs_dict)
+                        # kl_divergence_drop = policy.predict_kl_sample(obs_dict)
                         kl_divergence_drop_frame.append(kl_divergence_drop.detach().cpu().numpy().item())
             
             step_bar.update(env_action.shape[0])
@@ -231,12 +271,16 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
 
         # Save video with attention visualization
         if len(image_frames) > 0:
-            self._save_visualization(
+            output_path = self._save_visualization(
                 image_frames=image_frames,
                 kl_divergence_drop_frame=kl_divergence_drop_frame,
                 prefix=prefix,
                 episode_idx=episode_idx
             )
+        else:
+            output_path = None
+
+        return np.max(rewards), output_path, np.mean(action_horizon_length_lst)
 
     def _save_visualization(self, image_frames, kl_divergence_drop_frame, prefix, episode_idx):
         # Create the attention graph
@@ -316,6 +360,8 @@ class RobomimicLowdimLikelihoodRunner(BaseLowdimRunner):
             logger=None
         )
         clip.close()
+        
+        return output_path
 
     def undo_transform_action(self, action):
         raw_shape = action.shape

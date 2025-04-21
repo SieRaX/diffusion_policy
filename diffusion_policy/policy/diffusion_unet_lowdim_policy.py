@@ -462,7 +462,7 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             global_cond=global_cond,
             **self.kwargs)
         
-        delta_o = 0.01
+        delta_o = 0.1
         kl_dim_lst = list()
         for i in range(global_cond.shape[1]):
             global_cond_perturbed = global_cond.clone()
