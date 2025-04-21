@@ -99,10 +99,10 @@ task:
     dataset_path: data/robomimic/datasets/lift/ph/low_dim_abs.hdf5
     horizon: 16
     obs_keys:
-    - object
-    - robot0_eef_pos
-    - robot0_eef_quat
-    - robot0_gripper_qpos
+    - object #10
+    - robot0_eef_pos #3
+    - robot0_eef_quat #4
+    - robot0_gripper_qpos #2
     pad_after: 7
     pad_before: 1
     rotation_rep: rotation_6d

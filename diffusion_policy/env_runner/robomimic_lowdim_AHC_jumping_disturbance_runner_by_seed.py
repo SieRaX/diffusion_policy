@@ -298,7 +298,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                 obs, reward, done, info = env.step(env_action[[i]])
                 
                 if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.025 and number_of_disturbance < max_number_of_disturbance:
-                    speed = 0.003
+                    speed = 0.03
                     # if np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
                     direction = quat2matrix(env.env.env.get_observation()['robot0_eef_quat'])[0:2, 0]
                     direction = direction/np.linalg.norm(direction)
