@@ -100,7 +100,7 @@ def main():
         imgs = np.zeros((T+2, H, 2*W, C), dtype=epi['agentview_image'].dtype)
         print(f"episode {i}| T: {T}")
         
-        if i < 100:
+        if i >= 100:
             for t in tqdm(range(T+1), desc="Passing episode", leave=False):
                 sample = next(iterator)
         else:
