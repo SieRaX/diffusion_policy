@@ -12,7 +12,7 @@ from diffusion_policy.policy.base_lowdim_policy import BaseLowdimPolicy
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from diffusion_policy.model.diffusion.mask_generator import LowdimMaskGenerator
 from diffusion_policy.model.diffusion.kl_divergence import normal_kl, extract
-from diffusion_policy.common.kl_divergenc import scipy_estimator
+from diffusion_policy.common.kl_divergenc import scipy_estimator, skl_efficient, pytorch_kl_divergence
 import time
 
 class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
@@ -209,22 +209,28 @@ class DiffusionUnetLowdimPolicy(BaseLowdimPolicy):
             global_cond=global_cond,
             **self.kwargs)
         
-        delta_o = 0.01
+        delta_o = 0.001
         kl_dim_lst = list()
         for i in range(global_cond.shape[1]):
             global_cond_perturbed = global_cond.clone()
             global_cond_perturbed[:,i] = global_cond[:,i] + delta_o
             
-            perturbed_sample = self.conditional_sample(
-                cond_data, 
-                cond_mask,
-                local_cond=local_cond,
-                global_cond=global_cond_perturbed,
-                **self.kwargs)
-            time_start = time.time()
-            kl_dim = scipy_estimator(nsample.reshape(nsample.shape[0], -1).detach().cpu().numpy(), perturbed_sample.reshape(perturbed_sample.shape[0], -1).detach().cpu().numpy(), k=1)
-            time_end = time.time()
-            elpased_time = time_end - time_start
+            while True:
+                time_start = time.time()
+                perturbed_sample = self.conditional_sample(
+                    cond_data, 
+                    cond_mask,
+                    local_cond=local_cond,
+                    global_cond=global_cond_perturbed,
+                    **self.kwargs)
+                end_time = time.time()
+                sample_time = end_time - time_start
+                time_start = time.time()
+                kl_dim = pytorch_kl_divergence(nsample.reshape(nsample.shape[0], -1).detach(), perturbed_sample.reshape(perturbed_sample.shape[0], -1).detach(), k=1, chunk_size=2000)
+                time_end = time.time()
+                kl_derivation_time = time_end - time_start
+                if kl_dim > 0:
+                    break
             kl_dim_lst.append(kl_dim/delta_o)
         
         return torch.tensor(kl_dim_lst, device=device, dtype=dtype).mean()
