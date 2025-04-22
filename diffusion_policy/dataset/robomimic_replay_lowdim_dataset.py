@@ -132,6 +132,9 @@ def normalizer_from_stat(stat):
     max_abs = np.maximum(stat['max'].max(), np.abs(stat['min']).max())
     scale = np.full_like(stat['max'], fill_value=1/max_abs)
     offset = np.zeros_like(stat['max'])
+    
+    # scale = stat['max'] - stat['min']
+    # offset = stat['min']
     return SingleFieldLinearNormalizer.create_manual(
         scale=scale,
         offset=offset,
