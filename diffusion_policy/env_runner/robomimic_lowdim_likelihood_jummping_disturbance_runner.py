@@ -282,11 +282,18 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
             for i in range(env_action.shape[0]):
                 obs, reward, done, info = env.step(env_action[[i]])
                 
-                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.025 and number_of_disturbance < max_number_of_disturbance:
+                
+                '''
+                Setting for lift
+                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.1 and number_of_disturbance < max_number_of_disturbance:
                     speed = 0.03
+                    direction = direction/np.linalg.norm(direction)
+                '''
+                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.1 and number_of_disturbance < max_number_of_disturbance:
+                    speed = 0.04
                     # if np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
                     direction = quat2matrix(env.env.env.get_observation()['robot0_eef_quat'])[0:2, 0]
-                    direction = direction/np.linalg.norm(direction)
+                    direction = -direction/np.linalg.norm(direction)
                     state = env.env.env.get_state()
                     object_pos_quat = state['states'][10:17]
                     # direction = -object_pos_quat[0:2]/np.linalg.norm(object_pos_quat[0:2])
