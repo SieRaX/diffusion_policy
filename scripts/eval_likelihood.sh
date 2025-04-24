@@ -3,11 +3,11 @@
 # # Eval likelihood in Lift task
 # python eval_likelihood.py --checkpoint outputs/square_lowdim_ph_reproduction/2025.04.12_12.23.07_train_diffusion_unet_lowdim_square_lowdim_16_state_estimator/checkpoints/epoch=0650-test_mean_score=1.000.ckpt --output_dir outputs/square_lowdim_ph_reproduction/2025.04.12_12.23.07_train_diffusion_unet_lowdim_square_lowdim_16_state_estimator/debug --n_action_steps 14 --n_test_vis 50 --device cuda:1
 
-for horizon in {1..14}
-do
-    echo "Evaluating horizon: ${horizon}"
-    python eval_likelihood.py --checkpoint data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/checkpoints/epoch=0200-test_mean_score=1.000.ckpt --output_dir data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/uniform_horizon_jumpying_disturbance/eval_jumping_disturbance_horizon_${horizon}_num_distrub_1_pos_0.03_gripper_dir_near_gripper_0.025_50episodes  --n_action_steps ${horizon} --n_test_vis 50 --device cuda:1 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner
-done
+# for horizon in {1..14}
+# do
+#     echo "Evaluating horizon: ${horizon}"
+#     python eval_likelihood.py --checkpoint data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/checkpoints/epoch=0200-test_mean_score=1.000.ckpt --output_dir data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/uniform_horizon_jumpying_disturbance/eval_jumping_disturbance_horizon_${horizon}_num_distrub_1_pos_0.03_gripper_dir_near_gripper_0.025_50episodes  --n_action_steps ${horizon} --n_test_vis 50 --device cuda:1 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner
+# done
 
 # python eval_likelihood.py --checkpoint data/outputs/square_reproduction/2025.02.28/07.43.04_train_diffusion_unet_lowdim_square_lowdim/checkpoints/epoch=0150-test_mean_score=0.960.ckpt --output_dir data/outputs/square_reproduction/2025.02.28/07.43.04_train_diffusion_unet_lowdim_square_lowdim/ddeubg --n_action_steps 8 --n_test_vis 50 --device cuda:0 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_runner.RobomimicLowdimLikelihoodRunner
 
@@ -37,3 +37,9 @@ done
 # eval_likelihood.py --checkpoint outputs/lift_lowdim_ph_reproduction/2025.04.12_11.32.56_train_diffusion_unet_lowdim_lift_lowdim_16_state_estimator/checkpoints/epoch=0400-test_mean_score=1.000.ckpt --output_dir outputs/lift_lowdim_ph_reproduction/2025.04.12_11.32.56_train_diffusion_unet_lowdim_lift_lowdim_16_state_estimator/eval_disturbance_horizon_3_disturbance_prob_1.0_vel_0.0015_gripper_dir_near_gripper_0.05_100episode --n_action_steps 3 --n_test_vis 100 --device cuda:0 --env_runner diffusion_policy.env_runner.2025_04_20_robomimic_lowdim_likelihood_disturbance_runner_better_performance_on_horizon3.RobomimicLowdimLikelihoodDisturbanceRunner
 
 # eval_likelihood.py --checkpoint outputs/lift_lowdim_ph_reproduction/2025.04.12_11.32.56_train_diffusion_unet_lowdim_lift_lowdim_16_state_estimator/checkpoints/epoch=0400-test_mean_score=1.000.ckpt --output_dir outputs/lift_lowdim_ph_reproduction/2025.04.12_11.32.56_train_diffusion_unet_lowdim_lift_lowdim_16_state_estimator/eval_jumping_disturbance_horizon_14_num_distrub_1_pos_0.03_gripper_dir_near_gripper_0.025 --n_action_steps 14 --n_test_vis 10 --device cuda:0 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner
+
+# horizon=3
+# python eval_likelihood.py --checkpoint outputs/square_lowdim_reproduction/08.45.33_train_diffusion_unet_lowdim_square_lowdim_cnn_16/checkpoints/epoch=0550-test_mean_score=0.960.ckpt --output_dir outputs/square_lowdim_reproduction/08.45.33_train_diffusion_unet_lowdim_square_lowdim_cnn_16/eval_jumping_disturbance_horizon_${horizon}_num_distrub_1_pos_0.04_gripper_dir_near_gripper_0.1_50episodes  --n_action_steps ${horizon} --n_test_vis 20 --device cuda:0 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner --max_steps 300
+
+horizon=12
+python eval_likelihood.py --checkpoint outputs/square_lowdim_reproduction/08.46.04_train_diffusion_unet_lowdim_square_lowdim_cnn_32/checkpoints/epoch=0200-test_mean_score=0.960.ckpt --output_dir outputs/square_lowdim_reproduction/08.46.04_train_diffusion_unet_lowdim_square_lowdim_cnn_32/eval_likelihood_horizon_${horizon}_dummy  --n_action_steps ${horizon} --n_test_vis 2 --device cuda:1 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_runner.RobomimicLowdimLikelihoodRunner --max_steps 300

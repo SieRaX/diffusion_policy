@@ -20,7 +20,13 @@ from diffusion_policy.common.pytorch_util import dict_apply
 
 def main():
     pwd = os.path.dirname(os.path.abspath(__file__))
-    dataset_path = os.path.expanduser(os.path.join(pwd, '../data/robomimic/datasets/lift/ph/image_abs.hdf5'))
+
+    check_point_path = os.path.expanduser(os.path.join(pwd, "../outputs/square_lowdim_reproduction/08.46.04_train_diffusion_unet_lowdim_square_lowdim_cnn_32/checkpoints/epoch=0200-test_mean_score=0.960.ckpt"))
+    task_name = torch.load(open(check_point_path, 'rb'), pickle_module=dill)['cfg'].task.task_name
+    epoch_name = check_point_path.split('epoch=')[1].split('-')[0]
+    checkpoint_dir_path = os.path.dirname(check_point_path)
+    # dataset_path = os.path.expanduser(os.path.join(pwd, '../data/robomimic/datasets/lift/ph/image_abs.hdf5'))
+    dataset_path = os.path.expanduser(os.path.join(pwd, f'../data/robomimic/datasets/{task_name}/ph/image_abs.hdf5'))
 
     # Define shape metadata
     shape_meta = {
@@ -29,7 +35,7 @@ def main():
         },
         'obs': {
             'object': {
-                'shape': [10]
+                'shape': [14]
             },
             'agentview_image': {
                 'shape': [3, 84, 84],
@@ -68,9 +74,9 @@ def main():
     iterator = iter(dataloader)
 
     # bring h5py file
-    dataset_path = os.path.expanduser(os.path.join(pwd, '../data/robomimic/datasets/lift/ph/low_dim_abs.hdf5'))
-    # new_dataset_path = os.path.expanduser(os.path.join(pwd, '../data/robomimic/datasets/lift/ph/low_dim_abs_with_attention.hdf5'))
-    new_dataset_path = os.path.expanduser(os.path.join(pwd, '../data/robomimic/datasets/lift/ph/low_dim_abs_with_sine_wave_2.hdf5'))
+    dataset_path = os.path.expanduser(os.path.join(pwd, f'../data/robomimic/datasets/{task_name}/ph/low_dim_abs.hdf5'))
+    new_dataset_path = os.path.expanduser(os.path.join(pwd, checkpoint_dir_path, f'low_dim_abs_with_attention_epoch={epoch_name}.hdf5'))
+    # new_dataset_path = os.path.expanduser(os.path.join(pwd, '../data/robomimic/datasets/lift/ph/low_dim_abs_with_sine_wave_2.hdf5'))
 
     # First, copy the entire file to preserve all structure
     shutil.copy(dataset_path, new_dataset_path)
@@ -91,9 +97,8 @@ def main():
 
         # Prepaer model
         # Load model checkpoint
-        checkpoint = os.path.expanduser(os.path.join(pwd, "../data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/checkpoints/epoch=0200-test_mean_score=1.000.ckpt"))
-        output_dir = os.path.expanduser(os.path.join(pwd, "../data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/dummy"))
-        payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
+        output_dir = os.path.expanduser(os.path.join(pwd, checkpoint_dir_path, f'dummy'))
+        payload = torch.load(open(check_point_path, 'rb'), pickle_module=dill)
         cfg = payload['cfg']
         cfg.policy.noise_scheduler._target_ = 'diffusion_policy.schedulers.scheduling_ddpm.DDPMScheduler'
 
@@ -112,6 +117,7 @@ def main():
 
 
         iterator = iter(dataloader)
+        # num_demos = 2
         for i in tqdm(range(num_demos)):
             demo_key = f'data/demo_{i}'
             demo = file[demo_key]
@@ -135,8 +141,8 @@ def main():
                 obs_dict = dict_apply(n_obs_dict, 
                     lambda x: torch.from_numpy(x).to(device=device))
                 with torch.no_grad():
-                    # spatial_attention.append(policy.kl_divergence_drop(obs_dict).detach().cpu().numpy().item())
-                    spatial_attention.append(0.01*np.sin(np.pi*sample_idx/num_samples)+0.01*np.cos(np.pi*i/num_samples))
+                    spatial_attention.append(policy.kl_divergence_drop(obs_dict).detach().cpu().numpy().item())
+                    # spatial_attention.append(0.01*np.sin(np.pi*sample_idx/num_samples)+0.01*np.cos(np.pi*i/num_samples))
             spatial_attention = np.array(spatial_attention).reshape(-1, 1)
             
             next(iterator) # Fro syncing
