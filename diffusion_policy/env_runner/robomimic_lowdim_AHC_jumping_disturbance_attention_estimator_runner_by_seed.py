@@ -15,6 +15,7 @@ import wandb.sdk.data_types.video as wv
 import matplotlib.pyplot as plt
 from PIL import Image
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
+from datetime import datetime
 
 from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper
 from diffusion_policy.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
@@ -184,6 +185,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                 elif total_iteration > 10:
                     print(f"[Warning] eval_length: {eval_length}, action_horizon_average_length: {action_horizon_average_length} max iteration reached")
                     print()
+                    d_c_att = 0.005
                     all_video_paths.append(output_path)
                     all_rewards.append(-1.0)
                     all_prefixs.append('test/')
@@ -207,6 +209,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         # log
         max_rewards = collections.defaultdict(list)
         log_data = dict()
+        log_data['command_date_time'] = datetime.now().strftime("%Y.%m.%d %H.%M.%S")
         for i in range(len(all_rewards)): # 여기 zip으로 바꾸자
             eval_length = all_eval_lengths[i]
             prefix = all_prefixs[i]

@@ -3,12 +3,11 @@
 # # Eval likelihood in Lift task
 # python eval_likelihood.py --checkpoint outputs/square_lowdim_ph_reproduction/2025.04.12_12.23.07_train_diffusion_unet_lowdim_square_lowdim_16_state_estimator/checkpoints/epoch=0650-test_mean_score=1.000.ckpt --output_dir outputs/square_lowdim_ph_reproduction/2025.04.12_12.23.07_train_diffusion_unet_lowdim_square_lowdim_16_state_estimator/debug --n_action_steps 14 --n_test_vis 50 --device cuda:1
 
-# for horizon in {1..14}
-# do
-#     echo "Evaluating horizon: ${horizon}"
-#     python eval_likelihood.py --checkpoint data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/checkpoints/epoch=0200-test_mean_score=1.000.ckpt --output_dir data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/uniform_horizon_jumpying_disturbance/eval_jumping_disturbance_horizon_${horizon}_num_distrub_1_pos_0.03_gripper_dir_near_gripper_0.025_50episodes  --n_action_steps ${horizon} --n_test_vis 50 --device cuda:1 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner
-# done
-
+for horizon in {14..1}
+do
+    echo -e "\033[32mEvaluating horizon: ${horizon}\033[0m"
+    python eval_likelihood.py --checkpoint data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/checkpoints/epoch=0200-test_mean_score=1.000.ckpt --output_dir data/outputs/lift_lowdim_ph_reproduction/horizon_16/2025.03.11/10.57.22_train_diffusion_unet_lowdim_lift_lowdim_transformer_128/uniform_horizon_jumpying_disturbance_2/eval_jumping_disturbance_horizon_${horizon}_num_distrub_1_pos_0.03_gripper_dir_near_gripper_0.025_50episodes  --n_action_steps ${horizon} --n_test_vis 100 --device cuda:0 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner
+done
 # python eval_likelihood.py --checkpoint data/outputs/square_reproduction/2025.02.28/07.43.04_train_diffusion_unet_lowdim_square_lowdim/checkpoints/epoch=0150-test_mean_score=0.960.ckpt --output_dir data/outputs/square_reproduction/2025.02.28/07.43.04_train_diffusion_unet_lowdim_square_lowdim/ddeubg --n_action_steps 8 --n_test_vis 50 --device cuda:0 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_runner.RobomimicLowdimLikelihoodRunner
 
 

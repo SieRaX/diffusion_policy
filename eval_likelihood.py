@@ -40,9 +40,9 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test_vis, max_steps, 
     cfg = payload['cfg']
     cfg.policy.n_action_steps = n_action_steps
     cfg.task.env_runner.n_test = n_test_vis
-    cfg.task.env_runner.n_test_vis = n_test_vis
-    cfg.task.env_runner.n_train = 10
-    cfg.task.env_runner.n_train_vis = 10
+    cfg.task.env_runner.n_test_vis = 0
+    cfg.task.env_runner.n_train = 1
+    cfg.task.env_runner.n_train_vis = 1
     # Change the noise_scheduler to ours
     cfg.policy.noise_scheduler._target_ = 'diffusion_policy.schedulers.scheduling_ddpm.DDPMScheduler'
     # Change the env runner to ours
