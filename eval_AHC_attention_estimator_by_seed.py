@@ -63,12 +63,12 @@ def main(checkpoint, output_dir, device, n_test_vis, seed, max_steps, env_runner
         policy = workspace.ema_model
         
     checkpoint_path = os.path.dirname(checkpoint)
-    checkpoint_epoch = checkpoint_path.split('epoch=')[1].split('-')[0]
+    checkpoint_epoch = int(checkpoint.split('epoch=')[1].split('-')[0])
     normalizer = LinearNormalizer()
-    normalizer.load_state_dict(torch.load(os.path.join(checkpoint_path, f'normalizer.pth')))
+    normalizer.load_state_dict(torch.load(os.path.join(checkpoint_path, f'normalizer_epoch={checkpoint_epoch}.pth')))
     
-    attention_estimator = Seq2SeqTransformer()
-    attention_estimator.load_state_dict(torch.load(os.path.join(checkpoint_path, f'epoch={checkpoint_epoch}-transformer_attention_estimator.pth')))
+    attention_estimator = Seq2SeqTransformer(obs_dim=cfg.obs_dim*2, action_dim=cfg.action_dim, seq_len=cfg.policy.horizon)
+    attention_estimator.load_state_dict(torch.load(os.path.join(checkpoint_path, f'transformer_attention_estimator_epoch={checkpoint_epoch}.pth')))
     
     device = torch.device(device)
     policy.to(device)

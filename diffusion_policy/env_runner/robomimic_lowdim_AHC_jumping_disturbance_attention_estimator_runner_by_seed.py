@@ -150,12 +150,12 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         all_eval_lengths = []
         
         c_att = 0.001
-        # c_att = 0.03
+        # c_att = 0.02
         enable_render = True
         d_c_att = 0.005
         big_step = True
         
-        for eval_length in range(8, 9):
+        for eval_length in range(2, 31):
             total_iteration = 0
             while True:
                 print(f"[Start]finding eval_length: {eval_length} at c_att: {c_att}")
