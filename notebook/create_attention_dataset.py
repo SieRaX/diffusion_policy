@@ -21,7 +21,7 @@ from diffusion_policy.common.pytorch_util import dict_apply
 def main():
     pwd = os.path.dirname(os.path.abspath(__file__))
 
-    check_point_path = os.path.expanduser(os.path.join(pwd, "../outputs/square_lowdim_reproduction/08.46.04_train_diffusion_unet_lowdim_square_lowdim_cnn_32/checkpoints/epoch=0200-test_mean_score=0.960.ckpt"))
+    check_point_path = os.path.expanduser(os.path.join(pwd, "../outputs/can_ph_lowdim_reproduction/2025.04.24_18.13.10_train_diffusion_unet_lowdim_can_lowdim_cnn_16/checkpoints/epoch=0300-test_mean_score=1.000.ckpt"))
     task_name = torch.load(open(check_point_path, 'rb'), pickle_module=dill)['cfg'].task.task_name
     epoch_name = check_point_path.split('epoch=')[1].split('-')[0]
     checkpoint_dir_path = os.path.dirname(check_point_path)
