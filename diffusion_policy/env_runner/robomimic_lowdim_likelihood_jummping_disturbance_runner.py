@@ -115,17 +115,25 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
         self.abs_action = abs_action
         self.tqdm_interval_sec = tqdm_interval_sec
         
-        if 'Lift' == env_meta['env_name']:
+        if env_meta['env_name'] in ['Lift', 'PickPlaceCan']:
             def graped_object(normal_env):
                 mujoco_env = normal_env.env.env.env
-                return mujoco_env._check_grasp(gripper=mujoco_env.robots[0].gripper, object_geoms=mujoco_env.cube)
+                # return mujoco_env._check_grasp(gripper=mujoco_env.robots[0].gripper, object_geoms=mujoco_env.cube)
+                return False
         elif 'NutAssembly' in env_meta['env_name']:
             def graped_object(normal_env):
                 return normal_env.env.env.env.staged_rewards()[1]
         else:
             raise ValueError(f"Unknown environment: {env_meta['env_name']}")
-        
         self.graped_object = graped_object
+        
+        
+        if env_meta['env_name'] in ['NutAssembly', 'Lift']:
+            self.slice = slice(10, 17)
+        elif env_meta['env_name'] == 'PickPlaceCan':
+            self.slice = slice(31, 38)
+        else:
+            raise ValueError(f"Unknown environment: {env_meta['env_name']}")
 
     def run(self, policy: DiffusionUnetLowdimPolicy):
         device = policy.device
@@ -289,16 +297,16 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
                     speed = 0.03
                     direction = direction/np.linalg.norm(direction)
                 '''
-                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.1 and number_of_disturbance < max_number_of_disturbance:
-                    speed = 0.04
+                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.04 and number_of_disturbance < max_number_of_disturbance:
+                    speed = 0.03
                     # if np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
                     direction = quat2matrix(env.env.env.get_observation()['robot0_eef_quat'])[0:2, 0]
-                    direction = -direction/np.linalg.norm(direction)
+                    direction = direction/np.linalg.norm(direction)
                     state = env.env.env.get_state()
-                    object_pos_quat = state['states'][10:17]
+                    object_pos_quat = state['states'][self.slice]
                     # direction = -object_pos_quat[0:2]/np.linalg.norm(object_pos_quat[0:2])
                     new_state = {k:v for k,v in deepcopy(state).items() if k != 'model'} # If model is copied the robot could not open the gripper.
-                    new_state['states'][10:17] = object_pos_quat + np.array([*speed*direction, 0.0, 0.0, 0, 0, 0])
+                    new_state['states'][self.slice] = object_pos_quat + np.array([*speed*direction, 0.0, 0.0, 0, 0, 0])
                     env.env.env.reset_to(new_state)
                     number_of_disturbance += 1
                 # if not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:

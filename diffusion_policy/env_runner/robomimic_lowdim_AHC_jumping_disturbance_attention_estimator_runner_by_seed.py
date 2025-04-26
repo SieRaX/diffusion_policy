@@ -119,17 +119,24 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         self.abs_action = abs_action
         self.tqdm_interval_sec = tqdm_interval_sec
         
-        if 'Lift' == env_meta['env_name']:
+        if env_meta['env_name'] in ['Lift', 'PickPlaceCan']:
             def graped_object(normal_env):
                 mujoco_env = normal_env.env.env.env
-                return mujoco_env._check_grasp(gripper=mujoco_env.robots[0].gripper, object_geoms=mujoco_env.cube)
+                # return mujoco_env._check_grasp(gripper=mujoco_env.robots[0].gripper, object_geoms=mujoco_env.cube)
+                return False
         elif 'NutAssembly' in env_meta['env_name']:
             def graped_object(normal_env):
                 return normal_env.env.env.env.staged_rewards()[1]
         else:
             raise ValueError(f"Unknown environment: {env_meta['env_name']}")
-        
         self.graped_object = graped_object
+        
+        if env_meta['env_name'] in ['NutAssembly', 'Lift']:
+            self.slice = slice(10, 17)
+        elif env_meta['env_name'] == 'PickPlaceCan':
+            self.slice = slice(31, 38)
+        else:
+            raise ValueError(f"Unknown environment: {env_meta['env_name']}")
 
     def run(self, policy: DiffusionUnetLowdimPolicy, attention_estimator: Seq2SeqTransformer, attention_normalizer: LinearNormalizer, seed=100000):
         device = policy.device
@@ -147,7 +154,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         d_c_att = 0.005
         big_step = True
         
-        for eval_length in range(1, 14):
+        for eval_length in range(8, 9):
             total_iteration = 0
             while True:
                 print(f"[Start]finding eval_length: {eval_length} at c_att: {c_att}")
@@ -213,6 +220,8 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
             max_reward = np.max(all_rewards[i])
             max_rewards[prefix].append(max_reward)
             log_data[prefix+f'sim_max_reward_{eval_length}'] = max_reward
+            log_data[prefix+f'sim_action_horizon_average_length_{eval_length}'] = all_action_horizon_average_lengths[i]
+
 
             # visualize sim
             video_path = all_video_paths[i]
@@ -220,7 +229,6 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                 video_path = str(video_path)
                 sim_video = wandb.Video(video_path)
                 log_data[prefix+f'sim_video_{eval_length}'] = sim_video
-                log_data[prefix+f'sim_action_horizon_average_length_{eval_length}'] = all_action_horizon_average_lengths[i]
 
         # log aggregate metrics
         for prefix, value in max_rewards.items():
@@ -311,16 +319,17 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
             for i in range(env_action.shape[0]):
                 obs, reward, done, info = env.step(env_action[[i]])
                 
-                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.025 and number_of_disturbance < max_number_of_disturbance:
+                
+                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.04 and number_of_disturbance < max_number_of_disturbance:
                     speed = 0.03
                     # if np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
                     direction = quat2matrix(env.env.env.get_observation()['robot0_eef_quat'])[0:2, 0]
                     direction = direction/np.linalg.norm(direction)
                     state = env.env.env.get_state()
-                    object_pos_quat = state['states'][10:17]
+                    object_pos_quat = state['states'][self.slice]
                     # direction = -object_pos_quat[0:2]/np.linalg.norm(object_pos_quat[0:2])
                     new_state = {k:v for k,v in deepcopy(state).items() if k != 'model'} # If model is copied the robot could not open the gripper.
-                    new_state['states'][10:17] = object_pos_quat + np.array([*speed*direction, 0.0, 0.0, 0, 0, 0])
+                    new_state['states'][self.slice] = object_pos_quat + np.array([*speed*direction, 0.0, 0.0, 0, 0, 0])
                     env.env.env.reset_to(new_state)
                     number_of_disturbance += 1
                 np_obs_dict = {
