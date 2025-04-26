@@ -43,10 +43,22 @@
 # # policy.noise_scheduler.num_train_timesteps=1000
 # # Square_Hybrid_Reproduction
 
-python train.py --config-dir=. --config-name=low_dim_square_diffusion_policy_cnn.yaml \
+# python train.py --config-dir=. --config-name=low_dim_square_diffusion_policy_cnn.yaml \
+# training.seed=42 \
+# hydra.run.dir='outputs/square_lowdim_reproduction/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}_cnn_32' \
+# logging.group=Square_lowdim_Reproduction \
+# logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}_cnn_32' \
+# checkpoint.topk.k=5 \
+# training.device=cuda:0 \
+# horizon=32 \
+# policy.horizon=32 \
+# task.dataset.horizon=32 \
+# task.dataset.pad_after=31 ;
+
+python train.py --config-dir=. --config-name=low_dim_can_ph_diffusion_policy_cnn.yaml \
 training.seed=42 \
-hydra.run.dir='outputs/square_lowdim_reproduction/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}_cnn_32' \
-logging.group=Square_lowdim_Reproduction \
+hydra.run.dir='outputs/can_ph_lowdim_reproduction/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}_cnn_32' \
+logging.group=can_ph_lowdim_reproduction \
 logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}_cnn_32' \
 checkpoint.topk.k=5 \
 training.device=cuda:0 \
@@ -54,3 +66,19 @@ horizon=32 \
 policy.horizon=32 \
 task.dataset.horizon=32 \
 task.dataset.pad_after=31 ;
+
+python train.py --config-dir=. --config-name=low_dim_can_ph_diffusion_policy_cnn.yaml \
+training.seed=42 \
+hydra.run.dir='outputs/can_ph_lowdim_reproduction/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}_cnn_16' \
+logging.group=can_ph_lowdim_reproduction \
+logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}_cnn_16' \
+checkpoint.topk.k=5 \
+training.device=cuda:1;
+
+python train.py --config-dir=. --config-name=image_tool_hang_diffusion_policy_cnn.yaml \
+training.seed=42 \
+hydra.run.dir='outputs/toolhang_ph_image_reproduction/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}_cnn_16' \
+logging.group=toolhang_ph_image_reproduction \
+logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}_cnn_16' \
+checkpoint.topk.k=5 \
+training.device=cuda:1;
