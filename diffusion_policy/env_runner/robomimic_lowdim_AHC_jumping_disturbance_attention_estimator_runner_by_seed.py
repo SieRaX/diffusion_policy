@@ -151,8 +151,8 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         
         c_att = 0.001
         # c_att = 0.02
-        enable_render = True
-        d_c_att = 0.005
+        enable_render = False
+        d_c_att = 0.003
         big_step = True
         
         for eval_length in range(2, 31):
@@ -176,7 +176,7 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
                 )
                 print(f"c_att: {c_att}, eval_length: {eval_length}, action_horizon_average_length: {action_horizon_average_length}")
                 total_iteration += 1
-                if eval_length - 0.2 <= action_horizon_average_length <= eval_length + 0.2:
+                if eval_length - 0.5 <= action_horizon_average_length < eval_length + 0.5:
                     d_c_att = 0.005
                     c_att = c_att + d_c_att
                     

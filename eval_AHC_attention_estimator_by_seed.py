@@ -42,7 +42,7 @@ def main(checkpoint, output_dir, device, n_test_vis, seed, max_steps, env_runner
     cfg = payload['cfg']
     cfg.policy.n_action_steps = cfg.policy.horizon - cfg.policy.n_obs_steps
     cfg.task.env_runner.n_test = n_test_vis
-    cfg.task.env_runner.n_test_vis = n_test_vis
+    cfg.task.env_runner.n_test_vis = 10
     # cfg.task.env_runner.n_train = 2
     # cfg.task.env_runner.n_train_vis = 1
     # Change the noise_scheduler to ours
