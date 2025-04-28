@@ -33,7 +33,7 @@ def create_env(env_meta, obs_keys):
         env_meta=env_meta,
         render=False, 
         render_offscreen=False,
-        use_image_obs=False, 
+        use_image_obs=True, 
     )
     return env
 
@@ -297,7 +297,7 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
                     speed = 0.03
                     direction = direction/np.linalg.norm(direction)
                 '''
-                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.04 and number_of_disturbance < max_number_of_disturbance:
+                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.025 and number_of_disturbance < max_number_of_disturbance:
                     speed = 0.03
                     # if np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
                     direction = quat2matrix(env.env.env.get_observation()['robot0_eef_quat'])[0:2, 0]

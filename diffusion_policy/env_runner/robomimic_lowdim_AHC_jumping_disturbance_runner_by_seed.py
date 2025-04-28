@@ -35,7 +35,7 @@ def create_env(env_meta, obs_keys):
         env_meta=env_meta,
         render=False, 
         render_offscreen=False,
-        use_image_obs=False, 
+        use_image_obs=True, 
     )
     return env
 
