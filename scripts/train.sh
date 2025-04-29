@@ -86,3 +86,15 @@ logging.group=toolhang_ph_image_reproduction \
 logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}_cnn_16' \
 checkpoint.topk.k=5 \
 training.device=cuda:1;
+
+python train.py --config-dir=. --config-name=low_dim_lift_mh_diffusion_policy_cnn.yaml \
+training.seed=42 \
+hydra.run.dir='outputs/lift_lowdim_mh_reproduction/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}_cnn_128' \
+logging.group=lift_lowdim_mh_reproduction \
+logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}_cnn_128' \
+checkpoint.topk.k=5 \
+training.device=cuda:0 \
+horizon=128 \
+policy.horizon=128 \
+task.dataset.horizon=128 \
+task.dataset.pad_after=127 ;
