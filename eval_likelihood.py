@@ -26,10 +26,11 @@ from omegaconf import OmegaConf
 @click.option('-o', '--output_dir', required=True)
 @click.option('-d', '--device', default='cuda:0')
 @click.option('-n', '--n_action_steps', default=8)
+@click.option('-v', '--n_test', default=100)
 @click.option('-v', '--n_test_vis', default=4)
 @click.option('-t', '--max_steps', default=70)
 @click.option('-r', '--env_runner', default='diffusion_policy.env_runner.robomimic_lowdim_likelihood_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner')
-def main(checkpoint, output_dir, device, n_action_steps, n_test_vis, max_steps, env_runner):
+def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max_steps, env_runner):
     if os.path.exists(output_dir):
         click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
         shutil.rmtree(output_dir)
@@ -39,8 +40,8 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test_vis, max_steps, 
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['cfg']
     cfg.policy.n_action_steps = n_action_steps
-    cfg.task.env_runner.n_test = n_test_vis
-    cfg.task.env_runner.n_test_vis = 0
+    cfg.task.env_runner.n_test = n_test
+    cfg.task.env_runner.n_test_vis = n_test_vis
     cfg.task.env_runner.n_train = 1
     cfg.task.env_runner.n_train_vis = 1
     # Change the noise_scheduler to ours
