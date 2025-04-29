@@ -21,12 +21,14 @@ from diffusion_policy.common.pytorch_util import dict_apply
 def main():
     pwd = os.path.dirname(os.path.abspath(__file__))
 
-    check_point_path = os.path.expanduser(os.path.join(pwd, "../outputs/can_ph_lowdim_reproduction/2025.04.24_18.13.10_train_diffusion_unet_lowdim_can_lowdim_cnn_16/checkpoints/epoch=0300-test_mean_score=1.000.ckpt"))
-    task_name = torch.load(open(check_point_path, 'rb'), pickle_module=dill)['cfg'].task.task_name
+    check_point_path = os.path.expanduser(os.path.join(pwd, "../outputs/lift_lowdim_mh_reproduction/2025.04.28_10.55.24_train_diffusion_unet_lowdim_lift_lowdim_cnn_16/checkpoints/epoch=0100-test_mean_score=1.000.ckpt"))
+    cfg = torch.load(open(check_point_path, 'rb'), pickle_module=dill)['cfg']
+    task_name = cfg.task.task_name
+    ph_mh = cfg.task.dataset_type
     epoch_name = check_point_path.split('epoch=')[1].split('-')[0]
     checkpoint_dir_path = os.path.dirname(check_point_path)
     # dataset_path = os.path.expanduser(os.path.join(pwd, '../data/robomimic/datasets/lift/ph/image_abs.hdf5'))
-    dataset_path = os.path.expanduser(os.path.join(pwd, f'../data/robomimic/datasets/{task_name}/ph/image_abs.hdf5'))
+    dataset_path = os.path.expanduser(os.path.join(pwd, f'../data/robomimic/datasets/{task_name}/{ph_mh}/image_abs.hdf5'))
 
     # Define shape metadata
     shape_meta = {
@@ -35,7 +37,7 @@ def main():
         },
         'obs': {
             'object': {
-                'shape': [14]
+                'shape': [10]
             },
             'agentview_image': {
                 'shape': [3, 84, 84],
@@ -68,13 +70,14 @@ def main():
         seed=42,
         val_ratio=0.0,
         use_legacy_normalizer=False,
+        use_cache=True,
     )
 
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     iterator = iter(dataloader)
 
     # bring h5py file
-    dataset_path = os.path.expanduser(os.path.join(pwd, f'../data/robomimic/datasets/{task_name}/ph/low_dim_abs.hdf5'))
+    dataset_path = os.path.expanduser(os.path.join(pwd, f'../data/robomimic/datasets/{task_name}/{ph_mh}/low_dim_abs.hdf5'))
     new_dataset_path = os.path.expanduser(os.path.join(pwd, checkpoint_dir_path, f'low_dim_abs_with_attention_epoch={epoch_name}.hdf5'))
     # new_dataset_path = os.path.expanduser(os.path.join(pwd, '../data/robomimic/datasets/lift/ph/low_dim_abs_with_sine_wave_2.hdf5'))
 
