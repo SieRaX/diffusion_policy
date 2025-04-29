@@ -41,14 +41,17 @@
 # horizon=3
 # python eval_likelihood.py --checkpoint outputs/square_lowdim_reproduction/08.45.33_train_diffusion_unet_lowdim_square_lowdim_cnn_16/checkpoints/epoch=0550-test_mean_score=0.960.ckpt --output_dir outputs/square_lowdim_reproduction/08.45.33_train_diffusion_unet_lowdim_square_lowdim_cnn_16/eval_jumping_disturbance_horizon_${horizon}_num_distrub_1_pos_0.04_gripper_dir_near_gripper_0.1_50episodes  --n_action_steps ${horizon} --n_test_vis 20 --device cuda:0 --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner --max_steps 300
 
-n_test_vis=20
+n_test=200
+n_test_vis=0
 cuda_device=0
 pos=0.03
-gripper_distance=0.04
-for horizon in {15..15}
+gripper_distance=0.025
+max_steps=200
+for horizon in 8 16 24 32 40 48 56 64 72 80 88 96 104 112 120 126
+# for horizon in 126 120 112 104 96 88 80 72 64 56 48 40 32 24 16 8
 do
     echo -e "\033[32mEvaluate in horizon ${horizon}\033[0m"
-    python eval_likelihood.py --checkpoint outputs/can_ph_lowdim_reproduction/2025.04.24_18.13.14_train_diffusion_unet_lowdim_can_lowdim_cnn_32/checkpoints/epoch=0200-test_mean_score=1.000.ckpt --output_dir outputs/can_ph_lowdim_reproduction/2025.04.24_18.13.14_train_diffusion_unet_lowdim_can_lowdim_cnn_32/uniform_horizon_jumping_disturbance_clean_render/eval_jumping_disturbance_num_distrub_1_pos_${pos}_gripper_dir_near_gripper_${gripper_distance}_${n_test_vis}episodes_horizon_${horizon}  --n_action_steps ${horizon} --n_test_vis ${n_test_vis} --device cuda:${cuda_device} --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner --max_steps 150
+    python eval_likelihood.py --checkpoint outputs/lift_lowdim_mh_reproduction/2025.04.29_05.39.45_train_diffusion_unet_lowdim_lift_lowdim_cnn_128/checkpoints/epoch=0100-test_mean_score=1.000.ckpt --output_dir outputs/lift_lowdim_mh_reproduction/2025.04.29_05.39.45_train_diffusion_unet_lowdim_lift_lowdim_cnn_128/uniform/eval_jumping_disturbance_num_distrub_1_pos_${pos}_gripper_dir_near_gripper_${gripper_distance}_${n_test}episodes_max_steps_${max_steps}_horizon_${horizon}  --n_action_steps ${horizon} --n_test ${n_test} --n_test_vis ${n_test_vis} --device cuda:${cuda_device} --env_runner diffusion_policy.env_runner.robomimic_lowdim_likelihood_jummping_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner --max_steps ${max_steps}
 done
 
 # horizon=8
