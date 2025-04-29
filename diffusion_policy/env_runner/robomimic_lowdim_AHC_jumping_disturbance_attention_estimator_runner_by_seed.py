@@ -38,7 +38,7 @@ def create_env(env_meta, obs_keys):
         env_meta=env_meta,
         render=False, 
         render_offscreen=False,
-        use_image_obs=False, 
+        use_image_obs=True, 
     )
     return env
 
@@ -149,13 +149,13 @@ class RobomimicLowdimAHCRunner(BaseLowdimRunner):
         all_action_horizon_average_lengths = []
         all_eval_lengths = []
         
-        c_att = 0.001
-        # c_att = 0.02
-        enable_render = False
+        # c_att = 0.001
+        c_att = 0.03
+        enable_render = True
         d_c_att = 0.003
         big_step = True
         
-        for eval_length in range(2, 31):
+        for eval_length in range(15, 16):
             total_iteration = 0
             while True:
                 print(f"[Start]finding eval_length: {eval_length} at c_att: {c_att}")
