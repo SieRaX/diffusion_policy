@@ -144,6 +144,7 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
         all_seeds = []
         all_prefixs = []
         all_action_horizon_average_lengths = []
+        all_number_of_grasp_attempt = []
         # # Train episodes
         # with h5py.File(self.dataset_path, 'r') as f:
         #     for i in range(self.n_train):
@@ -179,7 +180,7 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
             env.seed(seed)
             print(f"test episode {i+1} with seed {seed}")
             
-            max_reward, output_path, action_horizon_average_length = self._run_episode(
+            max_reward, output_path, action_horizon_average_length, number_of_grasp_attempt = self._run_episode(
                 env=env,
                 policy=policy,
                 device=device,
@@ -193,9 +194,10 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
             all_seeds.append(seed)
             all_prefixs.append('test/')
             all_action_horizon_average_lengths.append(action_horizon_average_length)
-            
+            all_number_of_grasp_attempt.append(number_of_grasp_attempt)
         # log
         max_rewards = collections.defaultdict(list)
+        max_rewards_with_single_grasp = collections.defaultdict(list)
         log_data = dict()
         for i in range(len(all_rewards)): # 여기 zip으로 바꾸자
             seed = all_seeds[i]
@@ -204,7 +206,9 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
             max_rewards[prefix].append(max_reward)
             log_data[prefix+f'sim_max_reward_{seed}'] = max_reward
             log_data[prefix+f'sim_action_horizon_average_length_{seed}'] = all_action_horizon_average_lengths[i]
-            
+            log_data[prefix+f'sim_number_of_grasp_attempt_{seed}'] = all_number_of_grasp_attempt[i]
+            log_data[prefix+f'sim_max_reward_with_single_grasp_{seed}'] = max_reward *(1 if all_number_of_grasp_attempt[i] == 1 else 0) 
+            max_rewards_with_single_grasp[prefix].append(log_data[prefix+f'sim_max_reward_with_single_grasp_{seed}'])
             # visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
@@ -215,6 +219,10 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
         # log aggregate metrics
         for prefix, value in max_rewards.items():
             name = prefix+'mean_score'
+            value = np.mean(value)
+            log_data[name] = value
+        for prefix, value in max_rewards_with_single_grasp.items():
+            name = prefix+'mean_score_with_single_grasp'
             value = np.mean(value)
             log_data[name] = value
 
@@ -242,6 +250,10 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
         max_number_of_disturbance = 1
         number_of_disturbance = 0
         action_horizon_length_lst = []
+        number_of_grasp_attempt = 0
+        grasp_attempt = False
+        grasp_signal = 0
+        relase_signal = 0
         
         step_bar = tqdm.tqdm(
             total=self.max_steps, 
@@ -290,14 +302,26 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
             for i in range(env_action.shape[0]):
                 obs, reward, done, info = env.step(env_action[[i]])
                 
+                grasp_signal += 0 if env_action[i, -1] < 0.9 else 1
+                relase_signal += 0 if env_action[i, -1] > -0.9 else 1
                 
+                if not grasp_attempt and grasp_signal >6:
+                    number_of_grasp_attempt += 1
+                    grasp_signal = 0
+                    relase_signal = 0
+                    grasp_attempt = True
+                if grasp_attempt and relase_signal > 6:
+                    grasp_signal = 0
+                    relase_signal = 0
+                    grasp_attempt = False
                 '''
                 Setting for lift
                 if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.1 and number_of_disturbance < max_number_of_disturbance:
                     speed = 0.03
                     direction = direction/np.linalg.norm(direction)
                 '''
-                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.025 and number_of_disturbance < max_number_of_disturbance:
+                distance_criteria = 0.025
+                if np.random.uniform() < 1.1 and not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < distance_criteria and number_of_disturbance < max_number_of_disturbance:
                     speed = 0.03
                     # if np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
                     direction = quat2matrix(env.env.env.get_observation()['robot0_eef_quat'])[0:2, 0]
@@ -309,6 +333,7 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
                     new_state['states'][self.slice] = object_pos_quat + np.array([*speed*direction, 0.0, 0.0, 0, 0, 0])
                     env.env.env.reset_to(new_state)
                     number_of_disturbance += 1
+                    
                 # if not self.graped_object(env) and np.linalg.norm(env.env.env.get_observation()['object'][7:10]) < 0.10:
                 #     # move the object with velocity inversely proportional to the distance to the gripper
                 #     # object_to_gripper_dist = np.linalg.norm(env.env.env.get_observation()['object'][7:10])
@@ -358,7 +383,7 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
         else:
             output_path = None
 
-        return np.max(env.get_attr('reward')), output_path, np.mean(action_horizon_length_lst)
+        return np.max(env.get_attr('reward')), output_path, np.mean(action_horizon_length_lst), number_of_grasp_attempt
 
     def _save_visualization(self, image_frames, kl_divergence_drop_frame, gripper_speed_frame, prefix, episode_idx, sample_triggered_lst):
         # Create the attention graph
