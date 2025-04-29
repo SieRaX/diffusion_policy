@@ -67,13 +67,17 @@ policy.horizon=32 \
 task.dataset.horizon=32 \
 task.dataset.pad_after=31 ;
 
-python train.py --config-dir=. --config-name=low_dim_can_ph_diffusion_policy_cnn.yaml \
+python train.py --config-dir=. --config-name=low_dim_can_mh_diffusion_policy_cnn.yaml \
 training.seed=42 \
-hydra.run.dir='outputs/can_ph_lowdim_reproduction/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}_cnn_16' \
-logging.group=can_ph_lowdim_reproduction \
-logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}_cnn_16' \
+hydra.run.dir='outputs/can_lowdim_mh_reproduction/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}_cnn_16' \
+logging.group=can_lowdim_mh_reproduction \
+logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}_cnn_32' \
 checkpoint.topk.k=5 \
-training.device=cuda:1;
+training.device=cuda:0 \
+horizon=32 \
+policy.horizon=32 \
+task.dataset.horizon=32 \
+task.dataset.pad_after=31 ;
 
 python train.py --config-dir=. --config-name=image_tool_hang_diffusion_policy_cnn.yaml \
 training.seed=42 \
