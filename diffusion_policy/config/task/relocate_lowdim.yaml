@@ -1,0 +1,42 @@
+name: relocate_lowdim
+
+obs_dim: 39
+action_dim: 30
+keypoint_dim: 3
+
+task_name: &task_name relocate
+dataset_type: &dataset_type human-v2
+dataset_path: &dataset_path data/D4RL/${task.task_name}/${task.dataset_type}/data # for D4RL dataset, you need to specify only the dir, not the file
+abs_action: &abs_action False
+
+env_runner:
+  _target_: diffusion_policy.env_runner.d4rl_lowdim_runner.D4RLLowdimRunner
+  dataset_path: *dataset_path
+  n_train: 6
+  n_train_vis: 2
+  train_start_idx: 0
+  n_test: 50
+  n_test_vis: 4
+  test_start_seed: 100000
+  # use python's eval function as resolver, single-quoted string as argument
+  max_steps: 400
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  n_latency_steps: ${n_latency_steps}
+  render_hw: [128,128]
+  fps: 10
+  crf: 22
+  past_action: ${past_action_visible}
+  abs_action: *abs_action
+  n_envs: 28
+
+dataset:
+  _target_: diffusion_policy.dataset.d4rl_lowdim_dataset.D4RLReplayLowdimDataset
+  dataset_path: *dataset_path
+  horizon: ${horizon}
+  pad_before: ${eval:'${n_obs_steps}-1+${n_latency_steps}'}
+  pad_after: ${eval:'${n_action_steps}-1'}
+  abs_action: *abs_action
+  use_legacy_normalizer: False
+  seed: 42
+  val_ratio: 0.02
