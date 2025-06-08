@@ -1,0 +1,3 @@
+python train_cge.py --config-name=train_conditional_gradient_lowdim_workspace.yaml task=square_lowdim_abs hydra.run.dir='outputs/cge/${task.name}_${task.dataset_type}/${now:%Y.%m.%d}_${now:%H.%M.%S}_${name}_${task_name}' logging.name='${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}' logging.group='cge_${task.name}_${task.dataset_type}' task.dataset_type=mh training.device=cuda:1
+
+python render_spatial_attention_CGE.py --checkpoint outputs/cge/can_lowdim_mh/2025.06.07_09.01.03_train_conditional_gradient_lowdim_can_lowdim/checkpoints/latest.ckpt --output_dir outputs/cge/can_lowdim_ph/2025.06.07_08.59.36_train_conditional_gradient_lowdim_square_lowdim/spatial_attention_render --device cuda:1

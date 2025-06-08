@@ -1,0 +1,102 @@
+defaults:
+  - _self_
+  - task: lift_lowdim_abs
+
+name: train_conditional_gradient_lowdim
+_target_: conditional_gradient_estimator.workspace.conditional_gradient_estimation_workspace.ConditionalGradientEstimationWorkspace
+
+obs_dim: ${task.obs_dim}
+action_dim: ${task.action_dim}
+keypoint_dim: ${task.keypoint_dim}
+task_name: ${task.name}
+exp_name: "default"
+
+## although most of this config are not used, we maintain them for compatablility of task config
+horizon: 2
+n_obs_steps: 2
+n_action_steps: 1
+n_latency_steps: 0
+past_action_visible: False
+keypoint_visible_rate: 1.0
+obs_as_local_cond: False
+obs_as_global_cond: True
+pred_action_steps_only: False
+
+score_model:
+  _target_: conditional_gradient_estimator.model.score_model.ScoreNet
+  data_dim: ${eval:'${task.obs_dim}*${n_obs_steps}'}
+  condition_dim: ${task.action_dim}
+
+wrapper_dataset:
+  _target_: conditional_gradient_estimator.dataset.robomimic_replay_lowdim_dataset.RobomimicReplayLowdimDatasetWrapper
+
+dataloader:
+  batch_size: 256
+  num_workers: 1
+  shuffle: True
+  pin_memory: True
+  persistent_workers: False
+
+val_dataloader:
+  batch_size: 256
+  num_workers: 1
+  shuffle: False
+  pin_memory: True
+  persistent_workers: False
+
+optimizer:
+  _target_: torch.optim.Adam
+  lr: 1.0e-3
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+sampler:
+  _target_: conditional_gradient_estimator.sampler.sampler.EulerMaruyamaSampler
+  sample_dim: ${eval:'${task.obs_dim}*${n_obs_steps}'}
+  batch_size: 256
+  num_steps: 1000
+  eps: 1.0e-3
+
+training:
+  device: "cuda:0"
+  sigma: 50.0
+  seed: 42
+  num_epochs: 500
+  sde_loss_weight: 1.0
+  dsm_loss_weight: 0.05
+  sde_min_time: 1.0e-3
+  sample_every: 50
+  debug: False
+  max_train_steps: null
+
+logging:
+  project: diffusion_policy_debug
+  resume: True
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+  tags: ["${name}", "${task_name}", "${exp_name}"]
+  id: null
+  group: null
+
+checkpoint:
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 5
+    format_str: 'epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt'
+  save_last_ckpt: True
+  save_last_snapshot: False
+
+multi_run:
+  run_dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  sweep:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+    subdir: ${hydra.job.num}
