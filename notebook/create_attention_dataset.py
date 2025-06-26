@@ -21,7 +21,7 @@ from diffusion_policy.common.pytorch_util import dict_apply
 def main():
     pwd = os.path.dirname(os.path.abspath(__file__))
 
-    check_point_path = os.path.expanduser(os.path.join(pwd, "../outputs/can_lowdim_mh_reproduction/2025.04.28_21.13.17_train_diffusion_unet_lowdim_can_lowdim_cnn_16/checkpoints/epoch=0200-test_mean_score=0.960.ckpt"))
+    check_point_path = os.path.expanduser(os.path.join(pwd, "../outputs/lift_lowdim_mh_reproduction/2025.04.29_05.39.45_train_diffusion_unet_lowdim_lift_lowdim_cnn_128/checkpoints/epoch=0100-test_mean_score=1.000.ckpt"))
     cfg = torch.load(open(check_point_path, 'rb'), pickle_module=dill)['cfg']
     task_name = cfg.task.task_name
     ph_mh = cfg.task.dataset_type
@@ -115,7 +115,7 @@ def main():
         policy = workspace.model
 
         # Setup device and model
-        device = torch.device('cuda:0')
+        device = torch.device('cuda:1')
         policy.to(device);
         policy.eval();
 
