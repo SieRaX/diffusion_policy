@@ -211,6 +211,22 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
 
         return trajectory
 
+    def encode_obs(self, obs_dict: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        obs_dict: must include "obs" key
+        result: must include "action" key
+        """
+        assert 'past_action' not in obs_dict # not implemented yet
+        # normalize input
+        nobs = self.normalizer.normalize(obs_dict)
+        value = next(iter(nobs.values()))
+        B, To = value.shape[:2]
+        
+        this_nobs = dict_apply(nobs, lambda x: x[:,:self.n_obs_steps,...].reshape(-1,*x.shape[2:]))
+        nobs_features = self.obs_encoder(this_nobs)
+        global_cond = nobs_features.reshape(B, To, -1)
+        
+        return global_cond
 
     def predict_action(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """

@@ -93,7 +93,7 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
                     ),
                     n_obs_steps=env_n_obs_steps,
                     n_action_steps=env_n_action_steps,
-                    max_episode_steps=max_steps
+                    max_episode_steps=int(max_steps)
                 )
 
         self.env_meta = env_meta
@@ -110,7 +110,7 @@ class RobomimicLowdimLikelihoodDisturbanceRunner(BaseLowdimRunner):
         self.n_action_steps = n_action_steps
         self.n_latency_steps = n_latency_steps
         self.past_action = past_action
-        self.max_steps = max_steps
+        self.max_steps = int(max_steps)
         self.rotation_transformer = rotation_transformer
         self.abs_action = abs_action
         self.tqdm_interval_sec = tqdm_interval_sec

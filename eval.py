@@ -27,7 +27,7 @@ from omegaconf import OmegaConf
 @click.option('-n', '--n_action_steps', default=8)
 @click.option('-v', '--n_test', default=100)
 @click.option('-v', '--n_test_vis', default=4)
-@click.option('-t', '--max_steps', default=70)
+@click.option('-t', '--max_steps', default=None)
 def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max_steps):
     if os.path.exists(output_dir):
         click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
@@ -39,7 +39,9 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max
     cfg.policy.n_action_steps = n_action_steps
     cfg.task.env_runner.n_test = n_test
     cfg.task.env_runner.n_test_vis = n_test_vis
-    cfg.task.env_runner.max_steps = max_steps
+    
+    if max_steps is not None:
+        cfg.task.env_runner.max_steps = max_steps
     # cfg.task.env_runner.n_train = 10
     # cfg.task.env_runner.n_train_vis = 10
     cls = hydra.utils.get_class(cfg._target_)

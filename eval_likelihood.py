@@ -28,7 +28,7 @@ from omegaconf import OmegaConf
 @click.option('-n', '--n_action_steps', default=8)
 @click.option('-v', '--n_test', default=100)
 @click.option('-v', '--n_test_vis', default=4)
-@click.option('-t', '--max_steps', default=70)
+@click.option('-t', '--max_steps', default=None)
 @click.option('-r', '--env_runner', default='diffusion_policy.env_runner.robomimic_lowdim_likelihood_disturbance_runner.RobomimicLowdimLikelihoodDisturbanceRunner')
 def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max_steps, env_runner):
     if os.path.exists(output_dir):
@@ -49,7 +49,9 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max
     # Change the env runner to ours
     # cfg.task.env_runner._target_ = 'diffusion_policy.env_runner.pusht_keypoints_likelihood_runner.PushTKeypointsLikelihoodRunner'
     cfg.task.env_runner._target_ = env_runner
-    cfg.task.env_runner.max_steps = max_steps
+    
+    if max_steps is not None:
+        cfg.task.env_runner.max_steps = max_steps
     # cfg.task.env_runner.test_start_seed = 100050
     
     cls = hydra.utils.get_class(cfg._target_)
