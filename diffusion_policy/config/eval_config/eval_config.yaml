@@ -1,0 +1,36 @@
+defaults:
+  - _self_
+  - disturbance: base_disturbance_generator
+
+checkpoint: ???
+output_dir: ???
+normalizer_dir: ???
+attention_estimator_dir: ???
+device: "cuda:0"
+seed: 10000
+
+env_runner:
+  _target_: diffusion_policy.env_runner.robomimic_lowdim_ADP_jumpying_disturbance_runner_by_avg_length.RobomimicLowdimRunner
+  n_test: 200
+  n_test_vis: 200
+  max_steps: 70
+  n_action_steps: 3
+  render_hw: [256,256]
+  fps: 10
+  crf: 22
+  n_envs: 28
+  uniform_horizon: false
+  n_train: 0
+  n_train_vis: 0
+
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: ${output_dir}
+  sweep:
+    dir: ${output_dir}
+    subdir: ${hydra.job.num}
+
+# disturbance_generator:
+#   __target__: "../.../"

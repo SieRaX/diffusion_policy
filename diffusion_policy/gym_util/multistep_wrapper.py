@@ -3,6 +3,7 @@ from gym import spaces
 import numpy as np
 from collections import defaultdict, deque
 import dill
+from diffusion_policy.env_runner.disturbance_generator.jumping_disturbance_generator import BaseDisturbanceGenerator
 
 def stack_repeated(x, n):
     return np.repeat(np.expand_dims(x,axis=0),n,axis=0)
@@ -165,3 +166,114 @@ class MultiStepWrapper(gym.Wrapper):
         for k, v in self.info.items():
             result[k] = list(v)
         return result
+
+class SubMultiStepWrapperwithDisturbance(MultiStepWrapper):
+    def __init__(self, 
+            env, 
+            n_obs_steps, 
+            n_action_steps, 
+            max_episode_steps=None,
+            reward_agg_method='max',
+            disturbance_generator=BaseDisturbanceGenerator()
+        ):
+        super().__init__(env, n_obs_steps, n_action_steps, max_episode_steps, reward_agg_method)
+        self.disturbance_generator = disturbance_generator
+        self.horizon_idx = None
+        self.horizon_idx_list = list()
+        self.total_steps = 0
+        self.done = False
+        self.attention_pred_list = list()
+        self.sample_triggered_list = list()
+        self.complete = False
+        self.c_att = None
+        
+    def set_invalid_env(self, is_it_invalid):
+        if is_it_invalid:
+            self.reward = [-1.0] * self.max_episode_steps
+
+    def set_complete(self, complete):
+        self.complete = complete
+    
+    def reset(self):
+        if self.complete:
+            # This is for the capability of env runner.
+            # If self.complete is True, the env runner will not run at all.
+            obs = self._get_obs(self.n_obs_steps)
+            return obs
+        else:
+            self.disturbance_generator.reset()
+            self.horizon_idx = None
+            self.horizon_idx_list = list()
+            self.total_steps = 0
+            self.done = False
+            self.attention_pred_list = list()
+            self.sample_triggered_list = list()
+            self.c_att = None
+
+            res = super().reset()
+            return res
+    
+    def register_c_att(self, c_att):
+        if not self.complete:
+            self.c_att = c_att
+        
+    def register_horizon_idx(self, horizon_idx):
+        if not self.complete:
+            self.horizon_idx = horizon_idx
+            self.horizon_idx_list.append(horizon_idx)
+    
+    def register_attention_pred(self, attention_pred):
+        if not self.complete:
+            self.attention_pred_list.append(attention_pred)
+            sample_triggered = np.zeros(attention_pred.shape[0], dtype=np.bool)
+            sample_triggered[0]=True
+            self.sample_triggered_list.append(sample_triggered)
+    
+    def deregister_horizon_idx(self):
+        if not self.complete:
+            self.horizon_idx = None
+
+    def step(self, action):
+        """
+        actions: (n_action_steps,) + action_shape
+        """
+        if self.complete:
+            # Do not do anything when complete is True.
+            # Just give them the last observation.
+            observation = self._get_obs(self.n_obs_steps)
+            reward = aggregate(self.reward, self.reward_agg_method)
+            done = aggregate(self.done, 'max')
+            info = dict_take_last_n(self.info, self.n_obs_steps)
+            return observation, reward, done, info
+
+        else:
+            assert self.horizon_idx is not None, f"horizon_idx is not registered"
+            self.env.action_seq = action
+            
+            self.env.env.attention_pred_list = np.concatenate(self.attention_pred_list, axis=0)
+            self.env.env.sample_triggered_list = np.concatenate(self.sample_triggered_list, axis=0)
+
+            for act in action[:self.horizon_idx]:
+                if len(self.done) > 0 and self.done[-1]:
+                    # termination
+                    break
+                
+                observation, reward, done, info = gym.Wrapper.step(self, act)
+                self.total_steps += 1
+                new_state = self.disturbance_generator.generate_state_with_disturbance(self.env.env.env.env)
+                self.env.env.env.env.reset_to(new_state)
+
+                self.obs.append(observation)
+                self.reward.append(reward)
+                if (self.max_episode_steps is not None) \
+                    and (len(self.reward) >= self.max_episode_steps):
+                    # truncation
+                    done = True
+                self.done.append(done)
+                self._add_info(info)
+
+            observation = self._get_obs(self.n_obs_steps)
+            reward = aggregate(self.reward, self.reward_agg_method)
+            done = aggregate(self.done, 'max')
+            info = dict_take_last_n(self.info, self.n_obs_steps)
+            return observation, reward, done, info
