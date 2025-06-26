@@ -1,0 +1,4 @@
+name: base_disturbance_generator
+
+disturbance_generator:
+  _target_: diffusion_policy.env_runner.disturbance_generator.base_disturbance_generator.BaseDisturbanceGenerator
