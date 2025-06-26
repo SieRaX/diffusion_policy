@@ -54,7 +54,7 @@ optimizer:
 sampler:
   _target_: conditional_gradient_estimator.sampler.sampler.EulerMaruyamaSampler
   sample_dim: ${eval:'${task.obs_dim}*${n_obs_steps}'}
-  batch_size: 256
+  batch_size: ${eval:1*1}
   num_steps: 1000
   eps: 1.0e-3
 

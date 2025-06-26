@@ -1,4 +1,4 @@
-name: transport_lowdim
+name: transport_lowdim_abs
 
 obs_dim: 59 # 41+(3+4+2)*2
 action_dim: 20 # 10*2
