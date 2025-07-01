@@ -210,7 +210,7 @@ class ConditionalGradientEstimationWorkspace(BaseWorkspace):
                     
                 # Plot in wandb
                 tqdm_bar = tqdm.tqdm(range(self.raw_data["data"].shape[1]-1), leave=False, desc=f"Plotting")
-                
+                max_digit = len(str(self.raw_data["data"].shape[1]-1))
                 for i in tqdm_bar:
                     
                     gt_scatter_data = self.raw_data["data"][:, [i, i+1]]
@@ -251,9 +251,11 @@ class ConditionalGradientEstimationWorkspace(BaseWorkspace):
                     data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
                     unconditional_scatter_img = Image.fromarray(data)
                     plt.close()
-                    step_log[f"unconditional_scatter/{i}_{i+1}"] = wandb.Image(unconditional_scatter_img)
+                    step_log[f"unconditional_scatter/{str(i).zfill(max_digit)}_{str(i+1).zfill(max_digit)}"] = wandb.Image(unconditional_scatter_img)
                 
                 self.model.train()
+                # save checkpoint
+                self.save_checkpoint()
             
             wandb_run.log(step_log, step=global_step)
             global_step += 1
