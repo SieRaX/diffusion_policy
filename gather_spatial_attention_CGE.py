@@ -117,9 +117,13 @@ def main(checkpoint, output_dir, device, render):
         for i in range(replay_buffer.n_episodes):
             epi = replay_buffer.get_episode(i)
             
-            T, H, W, C = epi['agentview_image'].shape
+            number_of_image_obs = 0
+            for key in epi.keys():
+                if "image" in key:
+                    number_of_image_obs += 1
+            T, H, W, C = epi[key].shape
         
-            imgs = np.zeros((T, H, 2*W, C), dtype=epi['agentview_image'].dtype)
+            imgs = np.zeros((T, H, number_of_image_obs*W, C), dtype=epi[key].dtype)
             print(f"episode {i}| T: {T}")
             assert T == length_of_each_demo[i], f"T: {T} != length_of_each_demo[{i}]: {length_of_each_demo[i]}"
 
@@ -128,10 +132,11 @@ def main(checkpoint, output_dir, device, render):
             for t in tqdm(range(T), desc=f"Getting Image and Spatial Attention for episode {i}", leave=False):
                 image_sample = next(image_iterator)
                 low_dim_sample = next(low_dim_iterator)
-
-                # Transpose from (3,84,84) to (84,84,3) format
-                imgs[t, :, :W, :] = ((image_sample['obs']['agentview_image'][0, 0].permute(1, 2, 0) * 255).numpy()).astype(np.uint8)
-                imgs[t, :, W:, :] = (image_sample['obs']['robot0_eye_in_hand_image'][0, 0].permute(1, 2, 0) * 255).numpy().astype(np.uint8)
+                
+                for key_idx, key in enumerate(image_sample['obs'].keys()):
+                    if "image" in key:
+                        # Transpose from (3,84,84) to (84,84,3) format
+                        imgs[t, :, key_idx*W:(key_idx+1)*W, :] = ((image_sample['obs'][key][0, 0].permute(1, 2, 0) * 255).numpy()).astype(np.uint8)
 
                 condition = low_dim_sample['action'][:, 1, :].to(device)
                 normalized_condition = normalizer['condition'].normalize(condition).to(device)
@@ -168,7 +173,7 @@ def main(checkpoint, output_dir, device, render):
                 ax.grid(True)
                 
                 graph_frames = list()
-                for t in range(len(spatial_attention)):
+                for t in tqdm(range(len(spatial_attention)), desc="Generating attention visualization frames", leave=False):
                     ax.scatter(t, spatial_attention[t], color='red', s=30)
                     
                     fig.canvas.draw()
@@ -179,7 +184,7 @@ def main(checkpoint, output_dir, device, render):
                 
                 # Prepare combined frames
                 combined_frames = list()
-                for frame, graph in zip(imgs, graph_frames):
+                for frame, graph in tqdm(zip(imgs, graph_frames), desc="Combining frames", leave=False):
                     # Resize frame to match graph height
                     frame_height, frame_width = frame.shape[:2]
                     aspect_ratio = frame_width / frame_height
