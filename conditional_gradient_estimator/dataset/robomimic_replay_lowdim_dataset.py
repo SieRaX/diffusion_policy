@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import torch
 import numpy as np
+from diffusion_policy.model.common.normalizer import LinearNormalizer
 from diffusion_policy.dataset.robomimic_replay_lowdim_dataset import RobomimicReplayLowdimDataset
 from diffusion_policy.dataset.d4rl_lowdim_dataset import D4RLReplayLowdimDataset
 
