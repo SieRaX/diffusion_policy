@@ -33,6 +33,7 @@ import time
 @click.option('-o', '--output_dir', required=True)
 @click.option('-d', '--device', default='cuda:0')
 @click.option('-r', '--render', default=False)
+## Note that this rendering only renders the attention graph, not the environment since Minari dataset does not provide any state information necessary for rendering
 def main(checkpoint, output_dir, device, render):
     if os.path.exists(output_dir):
         click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
@@ -45,6 +46,8 @@ def main(checkpoint, output_dir, device, render):
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['cfg']
     cfg.training.device = device
+    OmegaConf.set_struct(cfg, False)
+    cfg.training.smoothing_loss_weight = 0.0
     # cfg.policy.n_action_steps = n_action_steps
     # cfg.task.env_runner.n_test = n_test
     # cfg.task.env_runner.n_test_vis = n_test_vis
@@ -70,29 +73,22 @@ def main(checkpoint, output_dir, device, render):
     # 3. image_dataset (for rendering)
     low_dim_dataset = hydra.utils.instantiate(cfg.task.dataset, val_ratio=0.0)
     low_dim_dataloader = DataLoader(low_dim_dataset, batch_size=1, shuffle=False)
+    # Set env for rendering
+    minari_dataset = low_dim_dataset.minari_dataset
+    env = minari_dataset.recover_environment()
+    env.unwrapped.render_mode = "rgb_array"
+    env.reset()
 
-    image_dataset_config_path = os.path.join(f"conditional_gradient_estimator/config/task/{cfg.task.task_name}_image{'_abs' if cfg.task.abs_action else ''}.yaml")
-    with open(image_dataset_config_path, 'r') as f:
-        image_dataset_config = OmegaConf.load(f)
-    image_dataset_config["task"] = {"task_name": cfg.task.task_name, "dataset_type": cfg.task.dataset_type, "abs_action": cfg.task.abs_action}
-    image_dataset_config["horizon"] = cfg.horizon
-    image_dataset_config["n_obs_steps"] = cfg.n_obs_steps
-    image_dataset_config["n_action_steps"] = cfg.n_action_steps
-    image_dataset_config["n_latency_steps"] = cfg.n_latency_steps
-    image_dataset_config["dataset_obs_steps"] = cfg.n_obs_steps
-    image_dataset = hydra.utils.instantiate(image_dataset_config.dataset, val_ratio=0.0)
-    image_dataloader = DataLoader(image_dataset, batch_size=1, shuffle=False)
+    replay_buffer = low_dim_dataset.replay_buffer
 
-    replay_buffer = image_dataset.replay_buffer
-
-    assert len(image_dataset) == len(low_dim_dataset) == replay_buffer.n_steps
+    assert len(low_dim_dataset) == replay_buffer.n_steps
 
     # get normalizer from workspace
     normalizer = workspace.normalizer
     
     # bring h5py file
     pwd = os.path.dirname(os.path.abspath(__file__))
-    dataset_path = os.path.expanduser(os.path.join(pwd, f'data/robomimic/datasets/{cfg.task.task_name}/{cfg.task.dataset_type}/low_dim_abs.hdf5'))
+    dataset_path = os.path.expanduser(os.path.join(pwd, f'data/D4RL/{cfg.task.task_name}/{cfg.task.dataset_type}/data/main_data.hdf5'))
     new_dataset_path = os.path.expanduser(os.path.join(pwd, output_dir, f'low_dim_abs_with_attention.hdf5'))
     
     # First, copy the entire file to preserve original dataset structure
@@ -102,57 +98,56 @@ def main(checkpoint, output_dir, device, render):
         file = h5py.File(new_dataset_path, 'r+')
         
         # check sanity of datasets
-        num_demos = len(file['data'].keys())
+        num_demos = len(file.keys())
         print(f"Number of demonstrations: {num_demos}")
         
         length_of_each_demo = list()
         for i in tqdm(range(num_demos)):
-            demo_key = f'data/demo_{i}'
-            demo = file[demo_key]
-            length_of_each_demo.append(demo.attrs['num_samples'])
+            episode_key = f'episode_{i}'
+            episode = file[episode_key]
+            length_of_each_demo.append(episode['actions'].shape[0])
         length_of_each_demo = np.array(length_of_each_demo)
         
-        image_iterator = iter(image_dataloader)
         low_dim_iterator = iter(low_dim_dataloader)
         for i in range(replay_buffer.n_episodes):
             epi = replay_buffer.get_episode(i)
+            minari_episode = minari_dataset[i]
+            # set env state
+            minari_state_dict = {key: minari_episode.infos["state"][key] for key in env.unwrapped._state_space.keys()}
             
-            number_of_image_obs = 0
-            image_key = None
-            for key in epi.keys():
-                if "image" in key:
-                    image_key = key
-                    number_of_image_obs += 1
-            assert image_key is not None, f"No image key found in episode {i}"
-            T, H, W, C = epi[image_key].shape
-        
-            imgs = np.zeros((T, H, number_of_image_obs*W, C), dtype=epi[image_key].dtype)
+            T = epi['action'].shape[0]
             print(f"episode {i}| T: {T}")
-            assert T == length_of_each_demo[i], f"T: {T} != length_of_each_demo[{i}]: {length_of_each_demo[i]}"
+            assert T == length_of_each_demo[i] == minari_episode.actions.shape[0], f"T: {T} != length_of_each_demo[{i}]: {length_of_each_demo[i]} != minari_episode.actions.shape[0]: {minari_episode.actions.shape[0]}"
+            
+            set_state_dict = {k:v[0] for k,v in minari_state_dict.items()}
+            env.unwrapped.set_env_state(set_state_dict)
+            frame = env.render()
+            H, W, C = frame.shape
+            
+            imgs = np.zeros((T, H, W, C), dtype=np.uint8)
+            imgs[0, :, 0*W:(0+1)*W, :] = frame
 
             normalized_condition_batch = list()
             normalized_data_batch = list()
-            for t in tqdm(range(T), desc=f"Getting Image and Spatial Attention for episode {i}", leave=False):
-                image_sample = next(image_iterator)
+            for t in tqdm(range(T), desc=f"Getting Observation Data for episode {i}", leave=False):
                 low_dim_sample = next(low_dim_iterator)
                 
-                for key_idx, key in enumerate(image_sample['obs'].keys()):
-                    if "image" in key:
-                        # Transpose from (3,84,84) to (84,84,3) format
-                        imgs[t, :, key_idx*W:(key_idx+1)*W, :] = ((image_sample['obs'][key][0, 0].permute(1, 2, 0) * 255).numpy()).astype(np.uint8)
-
                 condition = low_dim_sample['action'][:, 1, :].to(device)
                 normalized_condition = normalizer['condition'].normalize(condition).to(device)
                 
                 data = low_dim_sample['obs'].reshape(low_dim_sample['obs'].shape[0], -1).to(device)
-                # normalized_data = data.to(device)
                 normalized_data = normalizer['data'].normalize(data).to(device)
+
                 normalized_condition_batch.append(normalized_condition)
                 normalized_data_batch.append(normalized_data)
+                
+                set_state_dict = {k:v[t] for k,v in minari_state_dict.items()}
+                env.unwrapped.set_env_state(set_state_dict)
+                frame = env.render()
+                imgs[t, :, 0*W:(0+1)*W, :] = frame
 
             normalized_condition_batch = torch.cat(normalized_condition_batch, dim=0)
             normalized_data_batch = torch.cat(normalized_data_batch, dim=0)
-            # normalized_data_batch = torch.zeros_like(normalized_data_batch).to(device)
 
             with torch.no_grad():
                 t = 1e-3
@@ -230,17 +225,17 @@ def main(checkpoint, output_dir, device, render):
                 clip = ImageSequenceClip(combined_frames, fps=20)
                 clip.write_videofile(video_path, codec='libx264')
             
-            demo_key = f'data/demo_{i}'
-            demo = file[demo_key]
-            if 'spatial_attention' not in demo['obs'].keys():
-                demo['obs'].create_dataset(
+            episode_key = f'episode_{i}'
+            episode = file[episode_key]
+            if 'spatial_attention' not in episode.keys():
+                episode.create_dataset(
                     'spatial_attention',
                     shape=(T,1),   
                     data=spatial_attention,
                     dtype=np.float32
                 )
             else:
-                demo['obs']['spatial_attention'][:] = spatial_attention
+                episode['spatial_attention'][:] = spatial_attention
         
     finally:
         file.close()
