@@ -61,6 +61,7 @@ class D4RLReplayLowdimDataset(BaseLowdimDataset):
         self.pad_before = pad_before
         self.pad_after = pad_after
         self.use_legacy_normalizer = use_legacy_normalizer
+        self.minari_dataset = dataset
         
     def get_validation_dataset(self):
         val_set = copy.copy(self)
