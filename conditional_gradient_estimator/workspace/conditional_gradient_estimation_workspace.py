@@ -57,7 +57,6 @@ class ConditionalGradientEstimationWorkspace(BaseWorkspace):
         self.raw_data["condition"] = torch.stack(self.raw_data["condition"], dim=0)
             
         assert isinstance(dataset, RobomimicReplayLowdimDatasetWrapper)
-        assert isinstance(root_dataset, RobomimicReplayLowdimDataset)
         self.train_dataloader = DataLoader(dataset, **cfg.dataloader)
         self.normalizer = dataset.get_normalizer()
         
@@ -70,7 +69,8 @@ class ConditionalGradientEstimationWorkspace(BaseWorkspace):
         self.num_epochs = cfg.training.num_epochs
         self.sde_loss_weight = cfg.training.sde_loss_weight
         self.dsm_loss_weight = cfg.training.dsm_loss_weight
-        
+        self.smoothing_loss_weight = cfg.training.smoothing_loss_weight
+
         self.sde_min_time = cfg.training.sde_min_time
         
         self.sampler : BaseSampler
@@ -138,9 +138,27 @@ class ConditionalGradientEstimationWorkspace(BaseWorkspace):
                     fixed_time_loss_unconditional = loss_fn_fixed_time(self.model, x, None, self.marginal_prob_std, torch.tensor(self.sde_min_time))
                     fixed_time_loss_conditional = loss_fn_fixed_time(self.model, x, y, self.marginal_prob_std, torch.tensor(self.sde_min_time))
                     
+                    # Calculate gradient smoothing loss
+                    x.requires_grad_(True)
+                    model_output = self.model(x, torch.fill(torch.zeros(x.shape[0], device=x.device), self.sde_min_time), y)
+                    grad = torch.autograd.grad(model_output.sum(), x, create_graph=True)[0]
+                    smoothing_loss_x = torch.norm(grad, p=2)
+                    x.requires_grad_(False)
+                    
+                    # Calculate gradient smoothing loss
+                    y.requires_grad_(True)
+                    model_output = self.model(x, torch.fill(torch.zeros(x.shape[0], device=x.device), self.sde_min_time), y)
+                    grad = torch.autograd.grad(model_output.sum(), y, create_graph=True)[0]
+                    smoothing_loss_y = torch.norm(grad, p=2)
+                    y.requires_grad_(False)
+                    
+                    # smoothing_loss = smoothing_loss_x + 0.01 * smoothing_loss_y # For robomimic
+                    smoothing_loss = smoothing_loss_x + smoothing_loss_y # For D4RL
+                    
                     loss = \
                         self.sde_loss_weight * (conditional_loss + unconditional_loss) + \
-                        self.dsm_loss_weight * (fixed_time_loss_conditional + fixed_time_loss_unconditional)
+                        self.dsm_loss_weight * (fixed_time_loss_conditional + fixed_time_loss_unconditional) + \
+                        self.smoothing_loss_weight * smoothing_loss
                     
                     ## backward
                     self.optimizer.zero_grad()
@@ -152,6 +170,9 @@ class ConditionalGradientEstimationWorkspace(BaseWorkspace):
                     
                     step_log = {
                         'train_loss': loss.item(),
+                        'sde_loss': conditional_loss.item() + unconditional_loss.item(),
+                        'dsm_loss': fixed_time_loss_conditional.item() + fixed_time_loss_unconditional.item(),
+                        'smoothing_loss': smoothing_loss.item(),
                         'global_step': global_step,
                         'epoch': epoch,
                         'lr': self.scheduler.get_last_lr()[0]
@@ -174,7 +195,7 @@ class ConditionalGradientEstimationWorkspace(BaseWorkspace):
             # 1. sample unconditional data and compare with groudn truth
             # 2. sample conditional data and compare with ground truth
             
-            if (epoch % self.sample_every) == 0:
+            if ((epoch+1) % self.sample_every) == 0:
                 self.model.eval()
                 with torch.no_grad():
                     # gt_data = data['data'].to(self.device)
@@ -235,7 +256,7 @@ class ConditionalGradientEstimationWorkspace(BaseWorkspace):
                     conditional_scatter_img = Image.fromarray(data)
                     plt.close()
                     
-                    step_log[f"conditional_scatter/{i}_{i+1}"] = wandb.Image(conditional_scatter_img)
+                    step_log[f"conditional_scatter/{str(i).zfill(max_digit)}_{str(i+1).zfill(max_digit)}"] = wandb.Image(conditional_scatter_img)
                     
                     fig, ax = plt.subplots(figsize=(4,3))
                     ax.grid(True)

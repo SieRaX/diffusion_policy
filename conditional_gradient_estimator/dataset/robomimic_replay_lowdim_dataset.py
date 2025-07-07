@@ -1,10 +1,12 @@
 from torch.utils.data import Dataset
 import torch
 import numpy as np
-from diffusion_policy.model.common.normalizer import LinearNormalizer
+from diffusion_policy.dataset.robomimic_replay_lowdim_dataset import RobomimicReplayLowdimDataset
+from diffusion_policy.dataset.d4rl_lowdim_dataset import D4RLReplayLowdimDataset
 
 class RobomimicReplayLowdimDatasetWrapper(Dataset):
     def __init__(self, root_dataset, n_obs_steps=2):
+        assert isinstance(root_dataset, RobomimicReplayLowdimDataset) or isinstance(root_dataset, D4RLReplayLowdimDataset)
         self.dataset = root_dataset
         self.n_obs_steps = n_obs_steps
     def __len__(self):
