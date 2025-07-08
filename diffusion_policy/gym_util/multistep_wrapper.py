@@ -1,5 +1,5 @@
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 from collections import defaultdict, deque
 import dill
@@ -87,17 +87,21 @@ class MultiStepWrapper(gym.Wrapper):
         self.done = list()
         self.info = defaultdict(lambda : deque(maxlen=n_obs_steps+1))
     
-    def reset(self):
+    def reset(self, **kwargs):
         """Resets the environment using kwargs."""
-        obs = super().reset()
+        obs, info = super().reset(**kwargs)
 
         self.obs = deque([obs], maxlen=self.n_obs_steps+1)
         self.reward = list()
         self.done = list()
+        self.terminated = list()
+        self.truncated = list()
         self.info = defaultdict(lambda : deque(maxlen=self.n_obs_steps+1))
+        self._add_info(info)
 
         obs = self._get_obs(self.n_obs_steps)
-        return obs
+        info = dict_take_last_n(self.info, 1)
+        return obs, info
 
     def step(self, action):
         """
@@ -108,7 +112,8 @@ class MultiStepWrapper(gym.Wrapper):
             if len(self.done) > 0 and self.done[-1]:
                 # termination
                 break
-            observation, reward, done, info = super().step(act)
+            observation, reward, terminated, truncated, info = super().step(act)
+            done = terminated or truncated
 
             self.obs.append(observation)
             self.reward.append(reward)
@@ -116,14 +121,20 @@ class MultiStepWrapper(gym.Wrapper):
                 and (len(self.reward) >= self.max_episode_steps):
                 # truncation
                 done = True
+                terminated = True
             self.done.append(done)
+            self.terminated.append(terminated)
+            self.truncated.append(truncated)
             self._add_info(info)
 
         observation = self._get_obs(self.n_obs_steps)
         reward = aggregate(self.reward, self.reward_agg_method)
-        done = aggregate(self.done, 'max')
+        terminated = aggregate(self.terminated, 'max')
+        truncated = aggregate(self.truncated, 'max')
+        done = terminated or truncated
         info = dict_take_last_n(self.info, self.n_obs_steps)
-        return observation, reward, done, info
+        
+        return observation, reward, terminated, truncated, info
 
     def _get_obs(self, n_steps=1):
         """
@@ -166,6 +177,9 @@ class MultiStepWrapper(gym.Wrapper):
         for k, v in self.info.items():
             result[k] = list(v)
         return result
+    
+    def seed(self, seed=None):
+        return self.env.seed(seed)
 
 class SubMultiStepWrapperwithDisturbance(MultiStepWrapper):
     def __init__(self, 

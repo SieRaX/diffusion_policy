@@ -9,8 +9,10 @@ import json
 import dill
 import math
 import wandb.sdk.data_types.video as wv
-from diffusion_policy.gym_util.async_vector_env import AsyncVectorEnv
+# from gymnasium.vector import AsyncVectorEnv
+# from diffusion_policy.gym_util.async_vector_env import AsyncVectorEnv
 # from diffusion_policy.gym_util.sync_vector_env import SyncVectorEnv
+from diffusion_policy.gym_util.async_verctor_new import AsyncVectorEnv
 from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper
 from diffusion_policy.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
 from diffusion_policy.model.common.rotation_transformer import RotationTransformer
@@ -94,6 +96,38 @@ class D4RLLowdimRunner(BaseLowdimRunner):
         #     env_meta['env_kwargs']['controller_configs']['control_delta'] = False
         #     rotation_transformer = RotationTransformer('axis_angle', 'rotation_6d')
         
+        
+        # """
+        # dummy function! Remove this after testing!
+        # """
+        
+        # dataset = MinariDataset(os.path.expanduser(dataset_path))
+        # env = dataset.recover_environment()
+        # env = MultiStepWrapper(
+        #         VideoRecordingWrapper(
+        #             D4RLLowdimWrapper(
+        #                 env=env,
+        #                 init_state=None,
+        #                 render_hw=render_hw,
+        #             ),
+        #             video_recoder=VideoRecorder.create_h264(
+        #                 fps=fps,
+        #                 codec='h264',
+        #                 input_pix_fmt='rgb24',
+        #                 crf=crf,
+        #                 thread_type='FRAME',
+        #                 thread_count=1
+        #             ),
+        #             file_path=None,
+        #             steps_per_render=steps_per_render
+        #         ),
+        #         n_obs_steps=env_n_obs_steps,
+        #         n_action_steps=env_n_action_steps,
+        #         max_episode_steps=max_steps
+        #     )
+        # obs, info = env.reset()
+        # print(f"obs: {obs.shape}")
+        # input()
 
         def env_fn():
             # hard reset doesn't influence lowdim env
@@ -152,7 +186,7 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                 # switch to init_state reset
                 assert isinstance(env.env.env, D4RLLowdimWrapper)
                 env.env.env.init_state = None
-                env.seed(seed)
+                # env.seed(seed) # Not compatible with gymnasium
 
             env_seeds.append(train_idx)
             env_prefixs.append('train/')
@@ -209,7 +243,7 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                 # switch to seed reset
                 assert isinstance(env.env.env, D4RLLowdimWrapper)
                 env.env.env.init_state = None
-                env.seed(seed)
+                # env.seed(seed) # Not compatible with gymnasium
 
             env_seeds.append(seed)
             env_prefixs.append('test/')
@@ -268,7 +302,8 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                 args_list=[(x,) for x in this_init_fns])
 
             # start rollout
-            obs = env.reset()
+            this_env_seeds = self.env_seeds[this_global_slice]
+            obs, _ = env.reset(seed=this_env_seeds)
             past_action = None
             policy.reset()
 
@@ -313,8 +348,8 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                 if self.abs_action:
                     env_action = self.undo_transform_action(action)
 
-                obs, reward, done, info = env.step(env_action)
-                done = np.all(done)
+                obs, reward, terminated, truncated, info = env.step(env_action)
+                done = np.all(terminated | truncated)
                 past_action = action
 
                 # update pbar
@@ -347,7 +382,7 @@ class D4RLLowdimRunner(BaseLowdimRunner):
             # visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
-                sim_video = wandb.Video(video_path)
+                sim_video = wandb.Video(video_path, format="mp4")
                 log_data[prefix+f'sim_video_{seed}'] = sim_video
 
         # log aggregate metrics

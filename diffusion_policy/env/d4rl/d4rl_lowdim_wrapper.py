@@ -7,8 +7,8 @@ if __name__ == "__main__":
 from typing import List, Dict, Optional
 import numpy as np
 from copy import deepcopy
-import gym
-from gym.spaces import Box
+import gymnasium as gym
+from gymnasium.spaces import Box
 from gymnasium.wrappers.common import TimeLimit
 from gymnasium.utils.ezpickle import EzPickle
 from gymnasium.envs.mujoco.mujoco_env import MujocoEnv
@@ -61,7 +61,7 @@ class D4RLLowdimWrapper(gym.Env):
         np.random.seed(seed=seed)
         self._seed = seed
     
-    def reset(self):
+    def reset(self, **kwargs):
         if self.init_state is not None:
             # always reset to the same state
             # to be compatible with gym
@@ -82,20 +82,20 @@ class D4RLLowdimWrapper(gym.Env):
             self._seed = None
         else:
             # random reset
-            print(f"resetting env")
-            self.env.reset()
+            self.env.reset(**kwargs)
 
         # return obs
         obs = self.env._get_obs()
-        return obs
+        state = self.env.get_env_state()
+        return obs, {"state_dict": state}
     
     def step(self, action):
         raw_obs, reward, terminated, truncated, info = self.env.step(action)
         
-        done = np.all(terminated or truncated)
-        
         reward = 0 if reward < 0 else 1
-        return raw_obs, reward, done, info
+        
+        info["state_dict"] = self.env.get_env_state()
+        return raw_obs, reward, terminated, truncated, info
     
     def render(self, mode='rgb_array'):
         self.env.render_mode = mode
