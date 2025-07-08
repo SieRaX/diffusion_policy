@@ -12,7 +12,7 @@ import wandb.sdk.data_types.video as wv
 # from gymnasium.vector import AsyncVectorEnv
 # from diffusion_policy.gym_util.async_vector_env import AsyncVectorEnv
 # from diffusion_policy.gym_util.sync_vector_env import SyncVectorEnv
-from diffusion_policy.gym_util.async_verctor_new import AsyncVectorEnv
+from diffusion_policy.gym_util.async_vector_env_gymnasium import AsyncVectorEnv
 from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper
 from diffusion_policy.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
 from diffusion_policy.model.common.rotation_transformer import RotationTransformer
