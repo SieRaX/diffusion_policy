@@ -1,17 +1,17 @@
-name: robodiff
+name: robodiff_4
 channels:
   - pytorch
   - pytorch3d
   - nvidia
   - conda-forge
 dependencies:
-  - python=3.9
+  - python=3.10
   - pip=22.2.2
-  - cudatoolkit=11.6
-  - pytorch=1.12.1
-  - torchvision=0.13.1
+  - cudatoolkit=12.1
+  - pytorch=2.1.0
+  - torchvision=0.16.0
   - pytorch3d=0.7.0
-  - numpy=1.23.3
+  - numpy=1.24.3
   - numba==0.56.4
   - scipy==1.9.1
   - py-opencv=4.6.0
