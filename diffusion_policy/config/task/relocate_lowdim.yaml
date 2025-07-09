@@ -5,7 +5,7 @@ action_dim: 30
 keypoint_dim: 3
 
 task_name: &task_name relocate
-dataset_type: &dataset_type human-v2
+dataset_type: &dataset_type human-v3
 dataset_path: &dataset_path data/D4RL/${task.task_name}/${task.dataset_type}/data # for D4RL dataset, you need to specify only the dir, not the file
 abs_action: &abs_action False
 
