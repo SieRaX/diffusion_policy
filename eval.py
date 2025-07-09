@@ -27,7 +27,7 @@ from omegaconf import OmegaConf
 @click.option('-n', '--n_action_steps', default=8)
 @click.option('-v', '--n_test', default=100)
 @click.option('-v', '--n_test_vis', default=4)
-@click.option('-t', '--max_steps', default=None)
+@click.option('-t', '--max_steps', default=None, type=int)
 def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max_steps):
     if os.path.exists(output_dir):
         click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
