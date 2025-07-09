@@ -1,6 +1,5 @@
 from typing import Dict
 import torch
-from torch import vmap
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import grad

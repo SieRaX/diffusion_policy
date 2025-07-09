@@ -65,7 +65,7 @@ class D4RLLowdimWrapper(gym.Env):
         if self.init_state is not None:
             # always reset to the same state
             # to be compatible with gym
-            self.env.reset(options={"inital_state_dict": self.init_state})
+            self.env.set_env_state(self.init_state)
         elif self._seed is not None:
             # reset to a specific seed
             seed = self._seed

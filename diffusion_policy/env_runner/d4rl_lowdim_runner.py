@@ -178,48 +178,21 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                 env.env.file_path = None
                 if enable_render:
                     filename = pathlib.Path(output_dir).joinpath(
-                        'media', wv.util.generate_id() + ".mp4")
+                            'media', "train_seed_" + str(train_idx) + ".mp4")
                     filename.parent.mkdir(parents=False, exist_ok=True)
                     filename = str(filename)
                     env.env.file_path = filename
 
                 # switch to init_state reset
                 assert isinstance(env.env.env, D4RLLowdimWrapper)
-                env.env.env.init_state = None
+                minari_state_dict = {key: episode.infos["state"][key] for key in env.env.env.env._state_space.keys()}
+                set_state_dict = {k:v[0] for k,v in minari_state_dict.items()}
+                env.env.env.init_state = set_state_dict
                 # env.seed(seed) # Not compatible with gymnasium
 
             env_seeds.append(train_idx)
             env_prefixs.append('train/')
             env_init_fn_dills.append(dill.dumps(init_fn))
-            
-        # with h5py.File(dataset_path, 'r') as f:
-        #     for i in range(n_train):
-        #         train_idx = train_start_idx + i
-        #         enable_render = i < n_train_vis
-        #         init_state = f[f'data/demo_{train_idx}/states'][0]
-
-        #         def init_fn(env, seed=train_idx,
-        #             enable_render=enable_render):
-        #             # setup rendering
-        #             # video_wrapper
-        #             assert isinstance(env.env, VideoRecordingWrapper)
-        #             env.env.video_recoder.stop()
-        #             env.env.file_path = None
-        #             if enable_render:
-        #                 filename = pathlib.Path(output_dir).joinpath(
-        #                     'media', wv.util.generate_id() + ".mp4")
-        #                 filename.parent.mkdir(parents=False, exist_ok=True)
-        #                 filename = str(filename)
-        #                 env.env.file_path = filename
-
-        #             # switch to init_state reset
-        #             assert isinstance(env.env.env, D4RLLowdimWrapper)
-        #             env.env.env.init_state = None
-        #             env.seed(seed)
-
-        #         env_seeds.append(train_idx)
-        #         env_prefixs.append('train/')
-        #         env_init_fn_dills.append(dill.dumps(init_fn))
         
         # test
         for i in range(n_test):
@@ -235,7 +208,7 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                 env.env.file_path = None
                 if enable_render:
                     filename = pathlib.Path(output_dir).joinpath(
-                        'media', wv.util.generate_id() + ".mp4")
+                        'media', "test_seed_" + str(seed) + ".mp4")
                     filename.parent.mkdir(parents=False, exist_ok=True)
                     filename = str(filename)
                     env.env.file_path = filename
@@ -292,9 +265,11 @@ class D4RLLowdimRunner(BaseLowdimRunner):
             this_local_slice = slice(0,this_n_active_envs)
             
             this_init_fns = self.env_init_fn_dills[this_global_slice]
+            this_env_seeds = self.env_seeds[this_global_slice]
             n_diff = n_envs - len(this_init_fns)
             if n_diff > 0:
                 this_init_fns.extend([self.env_init_fn_dills[0]]*n_diff)
+                this_env_seeds.extend([self.env_seeds[0]]*n_diff)
             assert len(this_init_fns) == n_envs
 
             # init envs
@@ -302,7 +277,6 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                 args_list=[(x,) for x in this_init_fns])
 
             # start rollout
-            this_env_seeds = self.env_seeds[this_global_slice]
             obs, _ = env.reset(seed=this_env_seeds)
             past_action = None
             policy.reset()

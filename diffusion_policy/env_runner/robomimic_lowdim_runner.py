@@ -9,7 +9,7 @@ import h5py
 import dill
 import math
 import wandb.sdk.data_types.video as wv
-from diffusion_policy.gym_util.async_vector_env import AsyncVectorEnv
+from diffusion_policy.gym_util.async_vector_env_gymnasium import AsyncVectorEnv
 # from diffusion_policy.gym_util.sync_vector_env import SyncVectorEnv
 from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper
 from diffusion_policy.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
@@ -162,7 +162,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                     env.env.file_path = None
                     if enable_render:
                         filename = pathlib.Path(output_dir).joinpath(
-                            'media', wv.util.generate_id() + ".mp4")
+                            'media', "train_seed_" + str(train_idx) + ".mp4")
                         filename.parent.mkdir(parents=False, exist_ok=True)
                         filename = str(filename)
                         env.env.file_path = filename
@@ -189,7 +189,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                 env.env.file_path = None
                 if enable_render:
                     filename = pathlib.Path(output_dir).joinpath(
-                        'media', wv.util.generate_id() + ".mp4")
+                        'media', "test_seed_" + str(seed) + ".mp4")
                     filename.parent.mkdir(parents=False, exist_ok=True)
                     filename = str(filename)
                     env.env.file_path = filename
@@ -257,7 +257,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                 args_list=[(x,) for x in this_init_fns])
 
             # start rollout
-            obs = env.reset()
+            obs, _ = env.reset()
             past_action = None
             policy.reset()
 
@@ -302,7 +302,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                 if self.abs_action:
                     env_action = self.undo_transform_action(action)
 
-                obs, reward, done, info = env.step(env_action)
+                obs, reward, done, _, info = env.step(env_action)
                 done = np.all(done)
                 past_action = action
 
@@ -335,7 +335,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
             # visualize sim
             video_path = all_video_paths[i]
             if video_path is not None:
-                sim_video = wandb.Video(video_path)
+                sim_video = wandb.Video(video_path, format='mp4')
                 log_data[prefix+f'sim_video_{seed}'] = sim_video
 
         # log aggregate metrics
