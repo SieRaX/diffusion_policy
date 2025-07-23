@@ -188,19 +188,19 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper):
             n_action_steps, 
             max_episode_steps=None,
             reward_agg_method='max',
-            disturbance_generator=BaseDisturbanceGenerator()
+            disturbance_generator=BaseDisturbanceGenerator(),
         ):
         super().__init__(env, n_obs_steps, n_action_steps, max_episode_steps, reward_agg_method)
         self.disturbance_generator = disturbance_generator
         self.horizon_idx = None
         self.horizon_idx_list = list()
         self.total_steps = 0
-        self.done = False
+        self.done = list()
         self.attention_pred_list = list()
         self.sample_triggered_list = list()
         self.complete = False
         self.c_att = None
-        
+
     def set_invalid_env(self, is_it_invalid):
         if is_it_invalid:
             self.reward = [-1.0] * self.max_episode_steps
@@ -208,23 +208,24 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper):
     def set_complete(self, complete):
         self.complete = complete
     
-    def reset(self):
+    def reset(self, **kwargs):
         if self.complete:
             # This is for the capability of env runner.
             # If self.complete is True, the env runner will not run at all.
             obs = self._get_obs(self.n_obs_steps)
             return obs
         else:
-            self.disturbance_generator.reset()
+            if self.disturbance_generator is not None:
+                self.disturbance_generator.reset()
             self.horizon_idx = None
             self.horizon_idx_list = list()
             self.total_steps = 0
-            self.done = False
+            self.done = list()
             self.attention_pred_list = list()
             self.sample_triggered_list = list()
             self.c_att = None
 
-            res = super().reset()
+            res = super().reset(**kwargs)
             return res
     
     def register_c_att(self, c_att):
@@ -256,9 +257,11 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper):
             # Just give them the last observation.
             observation = self._get_obs(self.n_obs_steps)
             reward = aggregate(self.reward, self.reward_agg_method)
-            done = aggregate(self.done, 'max')
+            terminated = aggregate(self.terminated, 'max')
+            truncated = aggregate(self.truncated, 'max')
+            done = terminated or truncated
             info = dict_take_last_n(self.info, self.n_obs_steps)
-            return observation, reward, done, info
+            return observation, reward, terminated, truncated, info
 
         else:
             assert self.horizon_idx is not None, f"horizon_idx is not registered"
@@ -272,22 +275,45 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper):
                     # termination
                     break
                 
-                observation, reward, done, info = gym.Wrapper.step(self, act)
+                observation, reward, terminated, truncated, info = gym.Wrapper.step(self, act)
                 self.total_steps += 1
-                new_state = self.disturbance_generator.generate_state_with_disturbance(self.env.env.env.env)
-                self.env.env.env.env.reset_to(new_state)
+                done_el = terminated or truncated
+
+                if self.disturbance_generator is not None:
+                    new_state = self.disturbance_generator.generate_state_with_disturbance(self.env.env.env.env)
+                    self.env.env.env.env.reset_to(new_state)
 
                 self.obs.append(observation)
                 self.reward.append(reward)
                 if (self.max_episode_steps is not None) \
                     and (len(self.reward) >= self.max_episode_steps):
                     # truncation
-                    done = True
-                self.done.append(done)
+                    done_el = True
+                    terminated = True
+                    truncated = True
+
+                #     self.done.append(done_el)
+                #     self.terminated.append(terminated)
+                #     self.truncated.append(truncated)
+                #     self._add_info(info)
+
+                #     break
+
+                # else:
+                #     self.done.append(done_el)
+                #     self.terminated.append(terminated)
+                #     self.truncated.append(truncated)
+                #     self._add_info(info)
+
+                self.done.append(done_el)
+                self.terminated.append(terminated)
+                self.truncated.append(truncated)
                 self._add_info(info)
 
             observation = self._get_obs(self.n_obs_steps)
             reward = aggregate(self.reward, self.reward_agg_method)
-            done = aggregate(self.done, 'max')
+            terminated = aggregate(self.terminated, 'max')
+            truncated = aggregate(self.truncated, 'max')
+            # done = terminated or truncated
             info = dict_take_last_n(self.info, self.n_obs_steps)
-            return observation, reward, done, info
+            return observation, reward, terminated, truncated, info

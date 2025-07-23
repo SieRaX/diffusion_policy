@@ -24,9 +24,7 @@ from gymnasium.vector.utils import (
 
 
 class AsyncVectorEnv(AsyncVectorEnvBase):
-    def __init__(self, env_fns, **kwargs):
-        super().__init__(env_fns, **kwargs)
-        
+
     def __init__(
         self,
         env_fns,
@@ -38,6 +36,7 @@ class AsyncVectorEnv(AsyncVectorEnvBase):
         context=None,
         daemon=True,
         worker=None,
+        **kwargs,
     ):
         
         ctx = mp.get_context(context)
@@ -59,7 +58,7 @@ class AsyncVectorEnv(AsyncVectorEnvBase):
         dummy_env.close()
         del dummy_env
         
-        super().__init__(env_fns, shared_memory=shared_memory, copy=copy, context=context, daemon=daemon, worker=worker)
+        super().__init__(env_fns, shared_memory=shared_memory, copy=copy, context=context, daemon=daemon, worker=worker, **kwargs)
         # print(f"self.single_observation_space: {self.single_observation_space}")
         # print(f"self.num_envs: {self.num_envs}")
         # print(f"self.single_observaiton_spacetype: {type(self.single_observation_space)}")
