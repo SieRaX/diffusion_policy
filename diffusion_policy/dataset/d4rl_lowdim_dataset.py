@@ -21,7 +21,8 @@ class D4RLReplayLowdimDataset(BaseLowdimDataset):
                  pad_before=0, 
                  pad_after=0,
                  abs_action=False,
-                 use_legacy_normalizer=False, seed=42, val_ratio=0.0, max_train_episodes=None):
+                 use_legacy_normalizer=False, seed=42, val_ratio=0.0, max_train_episodes=None,
+                 info_keys=[]):
         
         replay_buffer = ReplayBuffer.create_empty_numpy()
         dataset = MinariDataset(dataset_path)
@@ -34,6 +35,9 @@ class D4RLReplayLowdimDataset(BaseLowdimDataset):
                 'obs': episode_data.observations[:-1],
                 'action': episode_data.actions,
             }
+
+            for key in info_keys:
+                data[key] = episode_data.infos[key]
             
             replay_buffer.add_episode(data)
         
@@ -62,7 +66,8 @@ class D4RLReplayLowdimDataset(BaseLowdimDataset):
         self.pad_after = pad_after
         self.use_legacy_normalizer = use_legacy_normalizer
         self.minari_dataset = dataset
-        
+        self.info_keys = info_keys
+
     def get_validation_dataset(self):
         val_set = copy.copy(self)
         val_set.sampler = SequenceSampler(
@@ -80,6 +85,8 @@ class D4RLReplayLowdimDataset(BaseLowdimDataset):
             'obs': self.replay_buffer['obs'],
             'action': self.replay_buffer['action']
         }
+        for key in self.info_keys:
+            data[key] = self.replay_buffer[key]
         if 'range_eps' not in kwargs:
             # to prevent blowing up dims that barely change
             kwargs['range_eps'] = 5e-2
