@@ -55,6 +55,7 @@ def main(cfg: OmegaConf):
     if os.path.exists(os.path.join(output_dir, "start_log.json")):
         click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
     start_log = dict()
+    start_log['command'] = ' '.join(sys.argv)
     json.dump(start_log, open(os.path.join(output_dir, "start_log.json"), "w"), indent=2, sort_keys=True)
     
     # load checkpoint
@@ -104,7 +105,7 @@ def main(cfg: OmegaConf):
         disturbance_generator=disturbance_generator
         )
     start_time = time.time()
-    runner_log = env_runner.run(policy, attention_estimator, normalizer, init_catt=200.0, init_dcatt=200.0)
+    runner_log = env_runner.run(policy, attention_estimator, normalizer, init_catt=10.0, init_dcatt=1.0)
     elapsed_time = time.time() - start_time
     # dump log to json
     json_log = dict()
