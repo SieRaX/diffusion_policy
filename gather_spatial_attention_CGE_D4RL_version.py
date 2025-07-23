@@ -86,11 +86,17 @@ def main(checkpoint, output_dir, device, render):
     # get normalizer from workspace
     normalizer = workspace.normalizer
     
-    # bring h5py file
     pwd = os.path.dirname(os.path.abspath(__file__))
+
+    # bring meta_data.json
+    meta_data_path = os.path.expanduser(os.path.join(pwd, f'data/D4RL/{cfg.task.task_name}/{cfg.task.dataset_type}/data/metadata.json'))
+    new_meta_data_path = os.path.expanduser(os.path.join(output_dir, f'metadata.json'))
+    shutil.copy(meta_data_path, new_meta_data_path)
+
+    # bring h5py file
     dataset_path = os.path.expanduser(os.path.join(pwd, f'data/D4RL/{cfg.task.task_name}/{cfg.task.dataset_type}/data/main_data.hdf5'))
-    new_dataset_path = os.path.expanduser(os.path.join(pwd, output_dir, f'low_dim_abs_with_attention.hdf5'))
-    
+    new_dataset_path = os.path.expanduser(os.path.join(pwd, output_dir, f'main_data.hdf5'))
+
     # First, copy the entire file to preserve original dataset structure
     shutil.copy(dataset_path, new_dataset_path)
     
@@ -227,15 +233,8 @@ def main(checkpoint, output_dir, device, render):
             
             episode_key = f'episode_{i}'
             episode = file[episode_key]
-            if 'spatial_attention' not in episode.keys():
-                episode.create_dataset(
-                    'spatial_attention',
-                    shape=(T,1),   
-                    data=spatial_attention,
-                    dtype=np.float32
-                )
-            else:
-                episode['spatial_attention'][:] = spatial_attention
+            # Put spatial attention at info
+            episode["infos"]["spatial_attention"] = spatial_attention[:, None]
         
     finally:
         file.close()
