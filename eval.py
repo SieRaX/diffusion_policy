@@ -28,7 +28,8 @@ from omegaconf import OmegaConf
 @click.option('-v', '--n_test', default=100)
 @click.option('-v', '--n_test_vis', default=4)
 @click.option('-t', '--max_steps', default=None, type=int)
-def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max_steps):
+@click.option('-s', '--scale', default=1.0, type=float)
+def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max_steps, scale):
     if os.path.exists(output_dir):
         click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -39,6 +40,8 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max
     cfg.policy.n_action_steps = n_action_steps
     cfg.task.env_runner.n_test = n_test
     cfg.task.env_runner.n_test_vis = n_test_vis
+    render_hw = cfg.task.env_runner.render_hw
+    cfg.task.env_runner.render_hw = [int(render_hw[0] * scale), int(render_hw[1] * scale)]
     
     if max_steps is not None:
         cfg.task.env_runner.max_steps = max_steps
