@@ -23,9 +23,17 @@ obs_as_global_cond: True
 pred_action_steps_only: False
 
 score_model:
-  _target_: conditional_gradient_estimator.model.score_model.ScoreNet
-  data_dim: ${eval:'${task.obs_dim}*${n_obs_steps}'}
+  # _target_: conditional_gradient_estimator.model.score_model.ScoreNet
+  # data_dim: ${eval:'${task.obs_dim}*${n_obs_steps}'}
+  # condition_dim: ${task.action_dim}
+  _target_: conditional_gradient_estimator.model.score_model.UnetBasedScoreNet
   condition_dim: ${task.action_dim}
+  channels: [32, 64, 128, 256, 512, 1024]
+  stride: [2, 2, 2, 2, 2, 2]
+  padding: [1, 1, 1, 1, 1, 1]
+  output_padding: [1, 1, 1, 1, 1, 1]
+  kernel_size: 3
+  embed_dim: 256
 
 wrapper_dataset:
   _target_: conditional_gradient_estimator.dataset.robomimic_replay_lowdim_dataset.RobomimicReplayLowdimDatasetWrapper
@@ -54,7 +62,7 @@ optimizer:
 sampler:
   _target_: conditional_gradient_estimator.sampler.sampler.EulerMaruyamaSampler
   sample_dim: ${eval:'${task.obs_dim}*${n_obs_steps}'}
-  batch_size: ${eval:1*1}
+  batch_size: ${eval:1024*2}
   num_steps: 1000
   eps: 1.0e-3
 
@@ -69,6 +77,7 @@ training:
   sample_every: 50
   debug: False
   max_train_steps: null
+  smoothing_loss_weight: 0.05
 
 logging:
   project: diffusion_policy_debug
