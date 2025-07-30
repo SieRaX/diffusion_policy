@@ -49,6 +49,8 @@ def main(cfg: OmegaConf):
     attention_estimator_dir = cfg.attention_estimator_dir
     device = cfg.device
     disturbance_cfg = cfg.disturbance
+    init_catt = cfg.init_catt
+    init_dcatt = cfg.init_dcatt
 
     # start_log.json works as an indicator that the evaluation is under process.
     # This will prevent other process to work on the same directory, or else, it might overwrite the exsiting logs.
@@ -105,7 +107,7 @@ def main(cfg: OmegaConf):
         disturbance_generator=disturbance_generator
         )
     start_time = time.time()
-    runner_log = env_runner.run(policy, attention_estimator, normalizer, init_catt=10.0, init_dcatt=1.0)
+    runner_log = env_runner.run(policy, attention_estimator, normalizer, init_catt=init_catt, init_dcatt=init_dcatt)
     elapsed_time = time.time() - start_time
     # dump log to json
     json_log = dict()
