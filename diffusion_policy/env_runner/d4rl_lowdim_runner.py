@@ -222,7 +222,7 @@ class D4RLLowdimRunner(BaseLowdimRunner):
             env_prefixs.append('test/')
             env_init_fn_dills.append(dill.dumps(init_fn))
         
-        env = AsyncVectorEnv(env_fns)
+        env = AsyncVectorEnv(env_fns, autoreset_mode="Disabled")
         # env = SyncVectorEnv(env_fns)
 
         self.env = env

@@ -92,9 +92,9 @@ class D4RLLowdimWrapper(gym.Env):
     def step(self, action):
         raw_obs, reward, terminated, truncated, info = self.env.step(action)
         
-        reward = 0 if reward < 0 else 1
+        reward = 0.0 if reward < 0 else 1.0
         
-        info["state_dict"] = self.env.get_env_state()
+        # info["state_dict"] = self.env.get_env_state() # This causes error in AsyncVectorEnv
         return raw_obs, reward, terminated, truncated, info
     
     def render(self, mode='rgb_array'):

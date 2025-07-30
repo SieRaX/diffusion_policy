@@ -255,7 +255,7 @@ class D4RLLowdimRunner(BaseLowdimRunner):
         self.min_n_action_steps = min_n_action_steps
         self.attention_exponent = attention_exponent
 
-    def run(self, policy: BaseLowdimPolicy, attention_estimator: Seq2SeqTransformer, attention_normalizer: LinearNormalizer, seed=100000, init_catt = 50.0, init_dcatt = 200.0):
+    def run(self, policy: BaseLowdimPolicy, attention_estimator: Seq2SeqTransformer, attention_normalizer: LinearNormalizer, seed=100000, init_catt = 1.0, init_dcatt = 1.0):
         device = policy.device
         dtype = policy.dtype
         env = self.env
@@ -384,7 +384,6 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                     env.call_each('register_attention_pred', args_list=[[attention_pred[i, :horizon_idx[i]]] for i in range(n_envs)])
                     
                     obs, reward, terminated, truncated, info = env.step(env_action)
-                    print(f"total_steps: {env.call('get_attr', 'total_steps')}")
                     done = np.all(terminated | truncated)
                     past_action = action
                     
@@ -392,7 +391,6 @@ class D4RLLowdimRunner(BaseLowdimRunner):
                     # env.call_wait()
                     
                     if done:
-                        print(f"all done")
                         c_att_array_before = c_att_array.clone()
                         
                         horizon_length_lst = env.call('get_attr', 'horizon_idx_list')
@@ -437,6 +435,7 @@ class D4RLLowdimRunner(BaseLowdimRunner):
 
                         # update find_catt_bar description
                         description_bar.set_description(f"[Task: {env_name}Lowdim | Chunk: {chunk_idx+1}/{n_chunks}]Finding c_att_bar | Average C_att: {c_att_array_before[~complete].mean().item():.2f} | Average length of Incomplete Env:"+(f"None" if horizon_length_avg is None else f"{horizon_length_avg[~complete].mean().item():.2f}"))
+                        description_bar.refresh()
                         
 
                     # update pbar

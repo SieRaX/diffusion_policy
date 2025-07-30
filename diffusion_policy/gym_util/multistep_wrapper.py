@@ -213,7 +213,8 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper):
             # This is for the capability of env runner.
             # If self.complete is True, the env runner will not run at all.
             obs = self._get_obs(self.n_obs_steps)
-            return obs
+            info = dict_take_last_n(self.info, 1)
+            return obs, info
         else:
             if self.disturbance_generator is not None:
                 self.disturbance_generator.reset()
