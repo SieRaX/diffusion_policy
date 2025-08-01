@@ -247,7 +247,7 @@ class D4RLLowdimRunner(BaseLowdimRunner):
         device = policy.device
         dtype = policy.dtype
         # env = self.env
-        env = AsyncVectorEnv(env_fns, autoreset_mode="Disabled")
+        env = AsyncVectorEnv(self.env_fns, autoreset_mode="Disabled")
         
         # plan for rollout
         n_envs = len(self.env_fns)
