@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 import dill
 import torch
 import threading
-
+import gc
 
 class BaseWorkspace:
     include_keys = tuple()
@@ -64,7 +64,7 @@ class BaseWorkspace:
                 payload['pickles'][key] = dill.dumps(value)
         if use_thread:
             self._saving_thread = threading.Thread(
-                target=lambda : torch.save(payload, path.open('wb'), pickle_module=dill))
+                target=lambda : (torch.save(payload, path.open('wb'), pickle_module=dill), payload.clear(), gc.collect()))
             self._saving_thread.start()
         else:
             torch.save(payload, path.open('wb'), pickle_module=dill)

@@ -203,11 +203,11 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
             env_prefixs.append('test/')
             env_init_fn_dills.append(dill.dumps(init_fn))
         
-        # env = AsyncVectorEnv(env_fns)
+        env = AsyncVectorEnv(env_fns, autoreset_mode="Disabled")
         # env = SyncVectorEnv(env_fns)
 
         self.env_meta = env_meta
-        # self.env = env
+        self.env = env
         self.env_fns = env_fns
         self.env_seeds = env_seeds
         self.env_prefixs = env_prefixs
@@ -228,8 +228,8 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
     def run(self, policy: BaseLowdimPolicy):
         device = policy.device
         dtype = policy.dtype
-        # env = self.env
-        env = AsyncVectorEnv(self.env_fns, autoreset_mode="Disabled")
+        env = self.env
+        # env = AsyncVectorEnv(self.env_fns, autoreset_mode="Disabled")
         
         # plan for rollout
         n_envs = len(self.env_fns)
@@ -314,7 +314,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
             # collect data for this round
             all_video_paths[this_global_slice] = env.render()[this_local_slice]
             all_rewards[this_global_slice] = env.call('get_attr', 'reward')[this_local_slice]
-        env.close()
+        # env.close()
         # log
         max_rewards = collections.defaultdict(list)
         log_data = dict()
