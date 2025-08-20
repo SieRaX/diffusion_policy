@@ -1,6 +1,6 @@
 import os
 import re
-
+import numpy as np
 import sys
 # use line-buffering for both stdout and stderr
 sys.stdout = open(sys.stdout.fileno(), mode='w', buffering=1)
@@ -27,12 +27,14 @@ def main(path):
 
     seed_number=0
     
-    for seed_number in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 42]:
+    json_log = dict()
+    mean_scores_list = list()
+    for seed_number in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]:
         # Find all directories starting with f"seed_{seed_number}" and get the last one
         seed_dirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d)) and d.startswith(f"seed_{seed_number}")]
         if not seed_dirs:
-            print(f"No directories found starting with seed_{seed_number}")
-            return
+            print(f"\033[91mNo directories found starting with seed_{seed_number}\033[0m")
+            continue
         entry = sorted(seed_dirs)[-1]  # Get the last directory alphabetically
         
         full_path = os.path.join(path, entry)
@@ -66,9 +68,24 @@ def main(path):
             else:
                 eval_uniform_dir="eval_ADP_by_length"
                 false_true="false"
-            command = f"python eval.py --checkpoint=\'{os.path.join(full_path, 'checkpoints', max_file)}\'  --output_dir={os.path.join(full_path, eval_uniform_dir, '16')} --device=cuda:0 --n_action_steps=16"
+
+            output_dir = os.path.join(full_path, eval_uniform_dir, '16')
+            command = f"python eval.py --checkpoint=\'{os.path.join(full_path, 'checkpoints', max_file)}\'  --output_dir={output_dir} --device=cuda:0 --n_action_steps=16"
             
             os.system(command)
+
+            # take the result of the eval and save it to a json file
+            eval_log = json.load(open(os.path.join(output_dir, 'eval_log.json')))
+            mean_score = eval_log['test/mean_score']
+            json_log[output_dir] = mean_score
+            mean_scores_list.append(mean_score)
+
+    json_log['mean_scores_mean'] = np.mean(mean_scores_list)
+    json_log['mean_scores_std'] = np.std(mean_scores_list)
+    json_log['mean_scores_min'] = np.min(mean_scores_list)
+    json_log['mean_scores_max'] = np.max(mean_scores_list)
+    json_log['command'] = ' '.join(sys.argv)
+    json.dump(json_log, open(os.path.join(path, 'total_eval_statistics.json'), 'w'), indent=2, sort_keys=True)
 
 if __name__ == '__main__':
     main()
