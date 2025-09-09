@@ -52,7 +52,10 @@ class AttentionRecordingWrapper(gym.Wrapper):
             self.additional_info[key].append(value)
                 
         return super().step(action)
-
+    
+    def seed(self, seed=None):
+        return self.env.seed(seed)
+    
     def render(self, mode='rgb_array', **kwargs):
 
         assert self.attention_pred_list is not None and self.sample_triggered_list is not None, "attention_pred_list and sample_triggered_list must be set"
