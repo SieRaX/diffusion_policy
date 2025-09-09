@@ -99,9 +99,7 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
                 env_runner.min_n_action_steps=2 env_runner.attention_exponent=1.0 env_runner.n_test=100 env_runner.n_test_vis=100 env_runner.uniform_horizon=false \
                 init_catt={c_init} init_dcatt={d_init}\
             "
-            os.system(f"echo {command} >> dummy.txt")
-            exit()
-            
+                        
             os.system(command)
 
             # take the result of the eval and save it to a json file
