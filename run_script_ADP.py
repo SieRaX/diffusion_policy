@@ -106,7 +106,7 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
 
             # take the result of the eval and save it to a json file
             eval_log = json.load(open(os.path.join(output_dir, 'eval_log.json')))
-            mean_score = eval_log['test/mean_score']
+            mean_score = eval_log['test/mean_score_valid']
             json_log[output_dir] = mean_score
             mean_scores_list.append(mean_score)
 
