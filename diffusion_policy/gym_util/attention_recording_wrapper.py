@@ -19,6 +19,9 @@ def get_additional_info(env:gym.Env):
             nail_pos = mujoco_env.data.site_xpos[mujoco_env.target_obj_site_id].ravel()
             goal_pos = mujoco_env.data.site_xpos[mujoco_env.goal_site_id].ravel()
             return {'goal_distance': np.linalg.norm(nail_pos - goal_pos)}
+        
+    else:
+        return dict()
 
 class AttentionRecordingWrapper(gym.Wrapper):
     def __init__(self, env, max_timesteps=70, max_attention=700.0):
