@@ -87,7 +87,7 @@ class RobomimicLowdimWrapper(gym.Env):
         obs = np.concatenate([
             raw_obs[key] for key in self.obs_keys
         ], axis=0)
-        info["state_dict"] = self.env.get_state()
+        info["state_dict"] = self.env.get_state()['states']
         return obs, reward, done, False, info
     
     def render(self, mode='rgb_array'):

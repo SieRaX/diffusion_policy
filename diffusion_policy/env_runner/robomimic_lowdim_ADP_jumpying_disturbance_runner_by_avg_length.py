@@ -310,8 +310,8 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                                       desc=f"[Task: {env_name}Lowdim | Chunk: {chunk_idx+1}/{n_chunks}]Finding c_att_bar | Average C_att: None | Average length: None", 
                                       leave=False, mininterval=self.tqdm_interval_sec)
             while not torch.all(complete):
-                obs = env.reset()
-                env.seed(this_env_seeds) # somehow, robomimic lowdim wrapper sets the seed to None after reset. So we give the seed again to the env.
+                obs, _ = env.reset(seed=this_env_seeds)
+                # env.seed(this_env_seeds) # somehow, robomimic lowdim wrapper sets the seed to None after reset. So we give the seed again to the env.
                 past_action = None
                 policy.reset()
 
@@ -345,11 +345,11 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                         lambda x: x.detach().to('cpu').numpy())
 
                     with torch.no_grad():
-                        obs_dict_with_dummy = torch.cat([obs_dict['obs'], torch.zeros_like(obs_dict['obs'][..., -1:]).to(device=device)], dim=-1)
-                        nobs = attention_normalizer['obs'].normalize(obs_dict_with_dummy)[..., :-1].to(device=device)
+                        # obs_dict_with_dummy = torch.cat([obs_dict['obs'], torch.zeros_like(obs_dict['obs'][..., -1:]).to(device=device)], dim=-1)
+                        nobs = attention_normalizer['obs'].normalize(obs_dict['obs']).to(device=device)
                         naction = attention_normalizer['action'].normalize(action_dict['action_pred']).to(device=device)
                         output = attention_estimator(nobs.reshape(nobs.shape[0], -1), naction)
-                        attention_pred = attention_normalizer['obs'].unnormalize(torch.cat([torch.zeros(size=(*output.shape[:2], obs.shape[-1])).to(device), output], dim=-1))[:, :, -1].detach().cpu().squeeze()
+                        attention_pred = attention_normalizer['spatial_attention'].unnormalize(output).detach().cpu().squeeze()
                         attention_pred = torch.pow(attention_pred, self.attention_exponent)
                         attention_pred_cumsum = torch.cumsum(attention_pred, dim=-1)
                         
@@ -390,7 +390,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                     # env.call_wait()
                     env.call_each('register_attention_pred', args_list=[[attention_pred[i, :horizon_idx[i]]] for i in range(n_envs)])
 
-                    obs, reward, done, info = env.step(env_action)
+                    obs, reward, done, _, info = env.step(env_action)
                     done = np.all(done)
                     past_action = action
                     

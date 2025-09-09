@@ -17,9 +17,12 @@ import json
 
 @click.command()
 @click.option('-p', '--path', required=True)
-@click.option('-a', '--attention_estimator_dir', required=True)
+@click.option('-a', '--attention_estimator_seed_dir', required=True)
 @click.option('-s', '--sub_dir')
-def main(path, attention_estimator_dir, sub_dir=""):
+@click.option('-d', '--device', default='cuda:0')
+@click.option('-ci', '--c_init', default=1.0, type=float)
+@click.option('-di', '--d_init', default=1.0, type=float)
+def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init=1.0, d_init=1.0):
     '''
     From given path e.g. "outputs/hammer_lowdim_human-v3_reproduction/train_by_seed"
     find all the best checkpoints and run eval.py for each checkpoint
@@ -41,13 +44,13 @@ def main(path, attention_estimator_dir, sub_dir=""):
         
         full_path = os.path.join(path, entry)
         
-        att_seed_dirs = [d for d in os.listdir(attention_estimator_dir) if os.path.isdir(os.path.join(attention_estimator_dir, d)) and d.startswith(f"seed_{seed_number}")]
+        att_seed_dirs = [d for d in os.listdir(attention_estimator_seed_dir) if os.path.isdir(os.path.join(attention_estimator_seed_dir, d)) and d.startswith(f"seed_{seed_number}")]
         if not att_seed_dirs:
-            print(f"\033[91mNo directories found starting with seed_{seed_number} in {attention_estimator_dir}\033[0m")
+            print(f"\033[91mNo directories found starting with seed_{seed_number} in {attention_estimator_seed_dir}\033[0m")
             continue
         att_entry = sorted(att_seed_dirs)[-1]
-        attention_estimator_dir = os.path.join(attention_estimator_dir, att_entry, sub_dir, "seq2seq_attention_estimator.pth")
-        normalizer_dir = os.path.join(attention_estimator_dir, att_entry, sub_dir, "normalizer.pth")
+        attention_estimator_dir = os.path.join(attention_estimator_seed_dir, att_entry, sub_dir, "seq2seq_attention_estimator.pth")
+        normalizer_dir = os.path.join(attention_estimator_seed_dir, att_entry, sub_dir, "normalizer.pth")
         
         if os.path.isdir(full_path):
             checkpoints_dir = os.path.join(full_path, "checkpoints")
@@ -69,7 +72,7 @@ def main(path, attention_estimator_dir, sub_dir=""):
                     except ValueError:
                         continue
             print(f"\033[92m{entry}: {max_file} (score={max_score})\033[0m")
-            max_file = max_file.replace("=", "=")
+            max_file = max_file.replace("=", "\\\=")
             
             eval_uniform = False
             
@@ -89,12 +92,15 @@ def main(path, attention_estimator_dir, sub_dir=""):
                 attention_estimator_dir=\'{attention_estimator_dir}\'\
                 normalizer_dir=\'{normalizer_dir}\'\
                 output_dir=\'{output_dir}\'\
-                device=cuda:0\
+                device={device}\
                 env_runner.n_action_steps=16\
                 ~env_runner.max_steps\
-                env_runner.max_attention=2.5\
-                env_runner.min_n_action_steps=4 env_runner.attention_exponent=1.0 env_runner.n_test=100 env_runner.n_test_vis=100 env_runner.uniform_horizon=false
+                env_runner.max_attention=15.0\
+                env_runner.min_n_action_steps=2 env_runner.attention_exponent=1.0 env_runner.n_test=100 env_runner.n_test_vis=100 env_runner.uniform_horizon=false \
+                init_catt={c_init} init_dcatt={d_init}\
             "
+            os.system(f"echo {command} >> dummy.txt")
+            exit()
             
             os.system(command)
 
@@ -109,7 +115,7 @@ def main(path, attention_estimator_dir, sub_dir=""):
     json_log['mean_scores_min'] = np.min(mean_scores_list)
     json_log['mean_scores_max'] = np.max(mean_scores_list)
     json_log['command'] = ' '.join(sys.argv)
-    json.dump(json_log, open(os.path.join(path, 'total_eval_statistics.json'), 'w'), indent=2, sort_keys=True)
+    json.dump(json_log, open(os.path.join(path, 'ADP_total_eval_statistics.json'), 'w'), indent=2, sort_keys=True)
 
 if __name__ == '__main__':
     main()

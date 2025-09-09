@@ -62,7 +62,7 @@ class AttentionRecordingWrapper(gym.Wrapper):
     def render(self, mode='rgb_array', **kwargs):
 
         assert self.attention_pred_list is not None and self.sample_triggered_list is not None, "attention_pred_list and sample_triggered_list must be set"
-        assert len(self.additional_info) > 0, "additional_info must be set"
+        # assert len(self.additional_info) > 0, "additional_info must be set" # We don't need additional info assertion for rendering
 
         if mode == 'rgb_array':
             fig, ax = plt.subplots(figsize=(4, 3))
