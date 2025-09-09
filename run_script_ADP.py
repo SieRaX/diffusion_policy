@@ -23,7 +23,8 @@ import json
 @click.option('-ci', '--c_init', default=1.0, type=float)
 @click.option('-di', '--d_init', default=1.0, type=float)
 @click.option('-m', '--max_steps', type=int)
-def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init=1.0, d_init=1.0, max_steps=100):
+@click.option('-ma', '--max_attention', type=float)
+def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init=1.0, d_init=1.0, max_steps=100, max_attention=15.0):
     '''
     From given path e.g. "outputs/hammer_lowdim_human-v3_reproduction/train_by_seed"
     find all the best checkpoints and run eval.py for each checkpoint
@@ -96,7 +97,7 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
                 device={device}\
                 env_runner.n_action_steps=16\
                 env_runner.max_steps={max_steps}\
-                env_runner.max_attention=15.0\
+                env_runner.max_attention={max_attention}\
                 env_runner.min_n_action_steps=2 env_runner.attention_exponent=1.0 env_runner.n_test=100 env_runner.n_test_vis=100 env_runner.uniform_horizon=false \
                 init_catt={c_init} init_dcatt={d_init}\
             "
