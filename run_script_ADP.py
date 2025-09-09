@@ -72,7 +72,7 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
                     except ValueError:
                         continue
             print(f"\033[92m{entry}: {max_file} (score={max_score})\033[0m")
-            max_file = max_file.replace("=", "\\\=")
+            max_file = max_file.replace("=", "\=")
             
             eval_uniform = False
             
