@@ -68,7 +68,9 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
             n_envs=None,
             disturbance_generator=BaseDisturbanceGenerator(),
             max_attention=700.0,
-            uniform_horizon=False
+            uniform_horizon=False,
+            min_n_action_steps=2,
+            attention_exponent=1.0,
         ):
         """
         Assuming:
@@ -255,6 +257,8 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
         self.tqdm_interval_sec = tqdm_interval_sec
         self.disturbance_generator = disturbance_generator
         self.uniform_horizon = uniform_horizon
+        self.min_n_action_steps = min_n_action_steps
+        self.attention_exponent = attention_exponent
         
     def run(self, policy: BaseLowdimPolicy, attention_estimator: Seq2SeqTransformer, attention_normalizer: LinearNormalizer, seed=100000, init_catt = 50.0, init_dcatt = 200.0):
         device = policy.device
@@ -346,6 +350,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                         naction = attention_normalizer['action'].normalize(action_dict['action_pred']).to(device=device)
                         output = attention_estimator(nobs.reshape(nobs.shape[0], -1), naction)
                         attention_pred = attention_normalizer['obs'].unnormalize(torch.cat([torch.zeros(size=(*output.shape[:2], obs.shape[-1])).to(device), output], dim=-1))[:, :, -1].detach().cpu().squeeze()
+                        attention_pred = torch.pow(attention_pred, self.attention_exponent)
                         attention_pred_cumsum = torch.cumsum(attention_pred, dim=-1)
                         
                         c_att_array_expanded = c_att_array.unsqueeze(1).expand_as(attention_pred_cumsum)
@@ -362,6 +367,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                         valid = mask.any(dim=1)
                         horizon_idx[~valid] = attention_pred.shape[1]  # Or any sentinel value like 32
                         horizon_idx += 1
+                        horizon_idx[horizon_idx < self.min_n_action_steps] = self.min_n_action_steps
                         
                         attention_pred = attention_pred.numpy()
                         
