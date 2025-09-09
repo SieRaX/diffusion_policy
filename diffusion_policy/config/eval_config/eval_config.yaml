@@ -23,6 +23,8 @@ env_runner:
   n_train: 0
   n_train_vis: 0
   max_attention: 2.5
+  min_n_action_steps: 2
+  attention_exponent: 1.0
 
 hydra:
   job:
