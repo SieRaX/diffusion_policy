@@ -8,6 +8,8 @@ normalizer_dir: ???
 attention_estimator_dir: ???
 device: "cuda:0"
 seed: 10000
+init_catt: 10.0
+init_dcatt: 5.0
 
 env_runner:
   _target_: diffusion_policy.env_runner.robomimic_lowdim_ADP_jumpying_disturbance_runner_by_avg_length.RobomimicLowdimRunner
