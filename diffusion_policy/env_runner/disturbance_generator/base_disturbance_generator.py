@@ -9,3 +9,6 @@ class BaseDisturbanceGenerator:
         new_state = {k:v for k,v in deepcopy(state).items() if k != 'model'}
         
         return new_state
+    
+    def reset(self):
+        pass
