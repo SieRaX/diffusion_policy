@@ -126,7 +126,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
             raise ValueError(f"Unknown environment: {env_meta['env_name']}")
         self.graped_object = graped_object
         
-        if env_meta['env_name'] in ['NutAssembly', 'Lift']:
+        if env_meta['env_name'] in ['NutAssembly', 'Lift', 'NutAssemblySquare', 'ToolHang']:
             self.slice = slice(10, 17)
         elif env_meta['env_name'] == 'PickPlaceCan':
             self.slice = slice(31, 38)
