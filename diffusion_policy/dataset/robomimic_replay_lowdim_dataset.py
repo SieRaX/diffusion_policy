@@ -34,7 +34,8 @@ class RobomimicReplayLowdimDataset(BaseLowdimDataset):
             use_legacy_normalizer=False,
             seed=42,
             val_ratio=0.0,
-            max_train_episodes=None
+            max_train_episodes=None,
+            info_keys=[]
         ):
         obs_keys = list(obs_keys)
         rotation_transformer = RotationTransformer(
@@ -48,6 +49,7 @@ class RobomimicReplayLowdimDataset(BaseLowdimDataset):
                 episode = _data_to_obs(
                     raw_obs=demo['obs'],
                     raw_actions=demo['actions'][:].astype(np.float32),
+                    raw_infos={key: demo[key] for key in info_keys},
                     obs_keys=obs_keys,
                     abs_action=abs_action,
                     rotation_transformer=rotation_transformer)
@@ -78,6 +80,7 @@ class RobomimicReplayLowdimDataset(BaseLowdimDataset):
         self.pad_before = pad_before
         self.pad_after = pad_after
         self.use_legacy_normalizer = use_legacy_normalizer
+        self.info_keys = info_keys
     
     def get_validation_dataset(self):
         val_set = copy.copy(self)
@@ -115,6 +118,16 @@ class RobomimicReplayLowdimDataset(BaseLowdimDataset):
 
 
         normalizer['obs'] = normalizer_from_stat(obs_stat)
+        
+        for key in self.info_keys:
+            single_field_normalizer = SingleFieldLinearNormalizer()
+            
+            if key == "spatial_attention":
+                data = self.replay_buffer[key][:, None]
+            else:
+                data = self.replay_buffer[key]
+            single_field_normalizer.fit(data, range_eps=1e-3)
+            normalizer[key] = single_field_normalizer
         return normalizer
 
     def get_all_actions(self) -> torch.Tensor:
@@ -141,7 +154,7 @@ def normalizer_from_stat(stat):
         input_stats_dict=stat
     )
     
-def _data_to_obs(raw_obs, raw_actions, obs_keys, abs_action, rotation_transformer):
+def _data_to_obs(raw_obs, raw_actions, raw_infos, obs_keys, abs_action, rotation_transformer):
     obs = np.concatenate([
         raw_obs[key] for key in obs_keys
     ], axis=-1).astype(np.float32)
@@ -168,4 +181,6 @@ def _data_to_obs(raw_obs, raw_actions, obs_keys, abs_action, rotation_transforme
         'obs': obs,
         'action': raw_actions
     }
+    for key in raw_infos.keys():
+        data[key] = raw_infos[key]
     return data
