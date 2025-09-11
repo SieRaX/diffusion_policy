@@ -114,7 +114,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
             env_meta['env_kwargs']['controller_configs']['control_delta'] = False
             rotation_transformer = RotationTransformer('axis_angle', 'rotation_6d')
         
-        if env_meta['env_name'] in ['Lift', 'PickPlaceCan']:
+        if env_meta['env_name'] in ['NutAssembly', 'Lift', 'NutAssemblySquare', 'ToolHang']:
             def graped_object(normal_env):
                 mujoco_env = normal_env.env.env.env
                 # return mujoco_env._check_grasp(gripper=mujoco_env.robots[0].gripper, object_geoms=mujoco_env.cube)
