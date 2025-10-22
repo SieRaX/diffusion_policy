@@ -1,4 +1,5 @@
 import gymnasium as gym
+# import gym
 import numpy as np
 from diffusion_policy.real_world.video_recorder import VideoRecorder
 
@@ -26,13 +27,15 @@ class VideoRecordingWrapper(gym.Wrapper):
 
     def reset(self, **kwargs):
         obs, info = super().reset(**kwargs)
+        # obs = super().reset(**kwargs)
         self.frames = list()
         self.step_count = 1
         self.video_recoder.stop()
+        # return obs
         return obs, info
     
     def step(self, action):
-        self.env.action_seq = self.action_seq
+        # self.env.action_seq = self.action_seq
         if action is None:
             result = None
         else:    

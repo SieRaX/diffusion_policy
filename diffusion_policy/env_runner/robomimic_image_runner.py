@@ -9,9 +9,9 @@ import h5py
 import math
 import dill
 import wandb.sdk.data_types.video as wv
-from diffusion_policy.gym_util.async_vector_env import AsyncVectorEnv
-from diffusion_policy.gym_util.sync_vector_env import SyncVectorEnv
-from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper
+from diffusion_policy.gym_util.async_vector_env_gymnasium import AsyncVectorEnv
+# from diffusion_policy.gym_util.sync_vector_env import SyncVectorEnv
+from diffusion_policy.gym_util.multistep_wrapper import MultiStepWrapper_Gymnasium
 from diffusion_policy.gym_util.video_recording_wrapper import VideoRecordingWrapper, VideoRecorder
 from diffusion_policy.model.common.rotation_transformer import RotationTransformer
 
@@ -33,7 +33,7 @@ def create_env(env_meta, shape_meta, enable_render=True):
     env = EnvUtils.create_env_from_metadata(
         env_meta=env_meta,
         render=False, 
-        render_offscreen=enable_render,
+        render_offscreen=False,
         use_image_obs=enable_render, 
     )
     return env
@@ -95,7 +95,7 @@ class RobomimicImageRunner(BaseImageRunner):
             # Disabled to run more envs.
             # https://github.com/ARISE-Initiative/robosuite/blob/92abf5595eddb3a845cd1093703e5a3ccd01e77e/robosuite/environments/base.py#L247-L248
             robomimic_env.env.hard_reset = False
-            return MultiStepWrapper(
+            return MultiStepWrapper_Gymnasium(
                 VideoRecordingWrapper(
                     RobomimicImageWrapper(
                         env=robomimic_env,
@@ -129,7 +129,7 @@ class RobomimicImageRunner(BaseImageRunner):
                     shape_meta=shape_meta,
                     enable_render=False
                 )
-            return MultiStepWrapper(
+            return MultiStepWrapper_Gymnasium(
                 VideoRecordingWrapper(
                     RobomimicImageWrapper(
                         env=robomimic_env,
@@ -267,7 +267,7 @@ class RobomimicImageRunner(BaseImageRunner):
                 args_list=[(x,) for x in this_init_fns])
 
             # start rollout
-            obs = env.reset()
+            obs, _ = env.reset()
             past_action = None
             policy.reset()
 
@@ -307,7 +307,7 @@ class RobomimicImageRunner(BaseImageRunner):
                 if self.abs_action:
                     env_action = self.undo_transform_action(action)
 
-                obs, reward, done, info = env.step(env_action)
+                obs, reward, done, _, info = env.step(env_action)
                 done = np.all(done)
                 past_action = action
 

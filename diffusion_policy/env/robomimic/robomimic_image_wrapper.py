@@ -1,8 +1,10 @@
 from typing import List, Optional
 from matplotlib.pyplot import fill
 import numpy as np
-import gym
-from gym import spaces
+# import gym
+# from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 from omegaconf import OmegaConf
 from robomimic.envs.env_robosuite import EnvRobosuite
 
@@ -74,7 +76,7 @@ class RobomimicImageWrapper(gym.Env):
         np.random.seed(seed=seed)
         self._seed = seed
     
-    def reset(self):
+    def reset(self, **kwargs):
         if self.init_state is not None:
             if not self.has_reset_before:
                 # the env must be fully reset at least once to ensure correct rendering
@@ -103,12 +105,14 @@ class RobomimicImageWrapper(gym.Env):
 
         # return obs
         obs = self.get_observation(raw_obs)
-        return obs
+        state = self.env.get_state()['states']
+        return obs, {"state_dict": state}
     
     def step(self, action):
         raw_obs, reward, done, info = self.env.step(action)
         obs = self.get_observation(raw_obs)
-        return obs, reward, done, info
+        info["state_dict"] = self.env.get_state()['states']
+        return obs, reward, done, False, info
     
     def render(self, mode='rgb_array'):
         if self.render_cache is None:
@@ -118,10 +122,10 @@ class RobomimicImageWrapper(gym.Env):
         return img
 
 
-def test():
+if __name__ == '__main__':
     import os
     from omegaconf import OmegaConf
-    cfg_path = os.path.expanduser('~/dev/diffusion_policy/diffusion_policy/config/task/lift_image.yaml')
+    cfg_path = os.path.expanduser('diffusion_policy/config/task/lift_image.yaml')
     cfg = OmegaConf.load(cfg_path)
     shape_meta = cfg['shape_meta']
 
@@ -130,7 +134,7 @@ def test():
     import robomimic.utils.env_utils as EnvUtils
     from matplotlib import pyplot as plt
 
-    dataset_path = os.path.expanduser('~/dev/diffusion_policy/data/robomimic/datasets/square/ph/image.hdf5')
+    dataset_path = os.path.expanduser('data/robomimic/datasets/lift/ph/image.hdf5')
     env_meta = FileUtils.get_env_metadata_from_dataset(
         dataset_path)
 

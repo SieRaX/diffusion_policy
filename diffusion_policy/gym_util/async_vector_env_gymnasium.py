@@ -44,19 +44,19 @@ class AsyncVectorEnv(AsyncVectorEnvBase):
         self.shared_memory = shared_memory
         self.copy = copy
 
-        # Added dummy_env_fn to fix OpenGL error in Mujoco
-        # disable any OpenGL rendering in dummy_env_fn, since it
-        # will conflict with OpenGL context in the forked child process
-        if dummy_env_fn is None:
-            dummy_env_fn = env_fns[0]
-        dummy_env = dummy_env_fn()
-        self.metadata = dummy_env.metadata
+        # # Added dummy_env_fn to fix OpenGL error in Mujoco
+        # # disable any OpenGL rendering in dummy_env_fn, since it
+        # # will conflict with OpenGL context in the forked child process
+        # if dummy_env_fn is None:
+        #     dummy_env_fn = env_fns[0]
+        # dummy_env = dummy_env_fn()
+        # self.metadata = dummy_env.metadata
 
-        if (observation_space is None) or (action_space is None):
-            observation_space = observation_space or dummy_env.observation_space
-            action_space = action_space or dummy_env.action_space
-        dummy_env.close()
-        del dummy_env
+        # if (observation_space is None) or (action_space is None):
+        #     observation_space = observation_space or dummy_env.observation_space
+        #     action_space = action_space or dummy_env.action_space
+        # dummy_env.close()
+        # del dummy_env
         
         super().__init__(env_fns, shared_memory=shared_memory, copy=copy, context=context, daemon=daemon, worker=worker, **kwargs)
         # print(f"self.single_observation_space: {self.single_observation_space}")
