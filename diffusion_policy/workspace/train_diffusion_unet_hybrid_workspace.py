@@ -191,7 +191,8 @@ class TrainDiffusionUnetHybridWorkspace(BaseWorkspace):
                             'train_loss': raw_loss_cpu,
                             'global_step': self.global_step,
                             'epoch': self.epoch,
-                            'lr': lr_scheduler.get_last_lr()[0]
+                            'lr': lr_scheduler.get_last_lr()[0],
+                            **self.model.get_extra_losses()
                         }
 
                         is_last_batch = (batch_idx == (len(train_dataloader)-1))
