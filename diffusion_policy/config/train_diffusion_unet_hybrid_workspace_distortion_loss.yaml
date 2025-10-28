@@ -47,6 +47,9 @@ policy:
   cond_predict_scale: True
   obs_encoder_group_norm: True
   eval_fixed_crop: True
+  
+  distortion_loss_weight: 0.01
+  distortion_ratio: 0.001
 
   # scheduler.step params
   # predict_epsilon: True

@@ -1,4 +1,3 @@
-from sre_parse import BRANCH
 from typing import Dict
 import math
 import torch
@@ -37,6 +36,8 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
             cond_predict_scale=True,
             obs_encoder_group_norm=False,
             eval_fixed_crop=False,
+            distortion_loss_weight=0.01,
+            distortion_ratio=0.001,
             # parameters passed to step
             **kwargs):
         super().__init__()
@@ -164,6 +165,11 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         self.n_obs_steps = n_obs_steps
         self.obs_as_global_cond = obs_as_global_cond
         self.kwargs = kwargs
+        
+        self.obs_config = obs_config
+        self.obs_key_shapes = obs_key_shapes
+        self.distortion_loss_weight = distortion_loss_weight
+        self.distortion_ratio = distortion_ratio
 
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
@@ -368,27 +374,38 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
             raise ValueError(f"Unsupported prediction type {pred_type}")
 
         ## calculating distortion loss
+        k = self.distortion_ratio
+        distortion_loss_weight = self.distortion_loss_weight
+        
+        lowdim_dim = 0
+        for key in self.obs_config['low_dim']:
+            lowdim_dim += self.obs_key_shapes[key][0]
+
         this_nobs_1 = dict_apply(nobs, 
             lambda x: x[:,:self.n_obs_steps,...].reshape(-1,*x.shape[2:]))
-        nobs_features_1 = self.obs_encoder(this_nobs_1).reshape(batch_size, -1)
+        nobs_features_1 = self.obs_encoder(this_nobs_1)
+        nobs_features_1[:, -9:] = nobs_features_1[:, -9:] * (k**0.5)
+        nobs_features_1 = nobs_features_1.reshape(batch_size, -1)
 
         this_nobs_2 = dict_apply(nobs, 
             lambda x: x[:,self.n_obs_steps:self.n_obs_steps*2,...].reshape(-1,*x.shape[2:]))
-        nobs_features_2 = self.obs_encoder(this_nobs_2).reshape(batch_size, -1)
+        nobs_features_2 = self.obs_encoder(this_nobs_2)
+        nobs_features_2[:, -9:] = nobs_features_2[:, -9:] * (k**0.5)
+        nobs_features_2 = nobs_features_2.reshape(batch_size, -1)
 
         n_obs_diff = torch.zeros(size=(batch_size,), device=trajectory.device, dtype=trajectory.dtype)
         for key in this_nobs_1.keys():
-            n_obs_diff += (this_nobs_1[key].reshape(batch_size, -1) - this_nobs_2[key].reshape(batch_size, -1)).norm(dim=-1)
-        feature_diff = (nobs_features_2 - nobs_features_1).norm(dim=-1)
+            n_obs_diff += (this_nobs_1[key].reshape(batch_size, -1) - this_nobs_2[key].reshape(batch_size, -1)).norm(dim=-1)**2
 
-        k = 0.02
+        feature_diff = (nobs_features_2 - nobs_features_1).norm(dim=-1)**2
+
         distortion_loss = F.mse_loss(k*n_obs_diff, feature_diff, reduction='none')
         # distortion_loss = ((feature_diff / n_obs_diff)-1)**2
 
         loss = F.mse_loss(pred, target, reduction='none')
         loss = loss * loss_mask.type(loss.dtype)
         loss = reduce(loss, 'b ... -> b (...)', 'mean')
-        loss = loss.mean() + 0.01*distortion_loss.mean()
+        loss = loss.mean() + distortion_loss_weight*distortion_loss.mean()
 
         self.extra_losses['distortion_loss'] = distortion_loss.mean().clone().detach().item()
         self.extra_losses['distortion'] = (feature_diff/(k*n_obs_diff)).mean().clone().detach().item()
