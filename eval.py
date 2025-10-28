@@ -30,10 +30,10 @@ from omegaconf import OmegaConf
 @click.option('-t', '--max_steps', default=None, type=int)
 @click.option('-s', '--scale', default=1.0, type=float)
 def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max_steps, scale):
-    if os.path.exists(output_dir):
-        click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
+#    if os.path.exists(output_dir):
+#        click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
     pathlib.Path(output_dir).mkdir(parents=True, exist_ok=True)
-    
+
     # load checkpoint
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     cfg = payload['cfg']
@@ -42,7 +42,7 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max
     cfg.task.env_runner.n_test_vis = n_test_vis
     render_hw = cfg.task.env_runner.render_hw
     cfg.task.env_runner.render_hw = [int(render_hw[0] * scale), int(render_hw[1] * scale)]
-    
+
     if max_steps is not None:
         cfg.task.env_runner.max_steps = max_steps
     # cfg.task.env_runner.n_train = 10
@@ -51,22 +51,22 @@ def main(checkpoint, output_dir, device, n_action_steps, n_test, n_test_vis, max
     workspace = cls(cfg, output_dir=output_dir)
     workspace: BaseWorkspace
     workspace.load_payload(payload, exclude_keys=None, include_keys=None)
-    
+
     # get policy from workspace
     policy = workspace.model
     if cfg.training.use_ema:
         policy = workspace.ema_model
-    
+
     device = torch.device(device)
     policy.to(device)
     policy.eval()
-    
+
     # run eval
     env_runner = hydra.utils.instantiate(
         cfg.task.env_runner,
         output_dir=output_dir)
     runner_log = env_runner.run(policy)
-    
+
     # dump log to json
     json_log = dict()
     for key, value in runner_log.items():

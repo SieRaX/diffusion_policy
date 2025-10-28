@@ -33,19 +33,19 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
     score_pattern = re.compile(r"test_mean_score=([\d\.eE+-]+)\.ckpt")
 
     seed_number=0
-    
+
     json_log = dict()
     mean_scores_list = list()
-    for seed_number in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]:
+    for seed_number in [6, 7]:
         # Find all directories starting with f"seed_{seed_number}" and get the last one
         seed_dirs = [d for d in os.listdir(path) if os.path.isdir(os.path.join(path, d)) and d.startswith(f"seed_{seed_number}")]
         if not seed_dirs:
             print(f"\033[91mNo directories found starting with seed_{seed_number}\033[0m")
             continue
         entry = sorted(seed_dirs)[-1]  # Get the last directory alphabetically
-        
+
         full_path = os.path.join(path, entry)
-        
+
         att_seed_dirs = [d for d in os.listdir(attention_estimator_seed_dir) if os.path.isdir(os.path.join(attention_estimator_seed_dir, d)) and d.startswith(f"seed_{seed_number}")]
         if not att_seed_dirs:
             print(f"\033[91mNo directories found starting with seed_{seed_number} in {attention_estimator_seed_dir}\033[0m")
@@ -53,14 +53,14 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
         att_entry = sorted(att_seed_dirs)[-1]
         attention_estimator_dir = os.path.join(attention_estimator_seed_dir, att_entry, sub_dir, "seq2seq_attention_estimator.pth")
         normalizer_dir = os.path.join(attention_estimator_seed_dir, att_entry, sub_dir, "normalizer.pth")
-        
+
         if os.path.isdir(full_path):
             checkpoints_dir = os.path.join(full_path, "checkpoints")
             if not os.path.isdir(checkpoints_dir):
                 continue
             checkpoint_list = sorted([f for f in os.listdir(checkpoints_dir) if f.endswith('.ckpt') and 'test_mean_score=' in f])
-            
-            
+
+
             max_score = None
             max_file = None
             for fname in checkpoint_list:
@@ -75,9 +75,9 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
                         continue
             print(f"\033[92m{entry}: {max_file} (score={max_score})\033[0m")
             max_file = max_file.replace("=", "\=")
-            
+
             eval_uniform = False
-            
+
             if eval_uniform:
                 eval_uniform_dir="eval_uniform_by_length"
                 false_true="true"
@@ -87,7 +87,7 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
 
             output_dir = os.path.join(full_path, eval_uniform_dir, '16')
             command = f"python eval.py --checkpoint=\'{os.path.join(full_path, 'checkpoints', max_file)}\'  --output_dir={output_dir} --device=cuda:0 --n_action_steps=16"
-            
+
             command = f"python eval_AHC_attention_estimator_by_length_cge_hydra_version.py \
                 --config-name=eval_config.yaml\
                 checkpoint=\'{os.path.join(full_path, 'checkpoints', max_file)}\'\
@@ -101,7 +101,7 @@ def main(path, attention_estimator_seed_dir, sub_dir="", device='cuda:0', c_init
                 env_runner.min_n_action_steps=2 env_runner.attention_exponent=1.0 env_runner.n_test=100 env_runner.n_test_vis=100 env_runner.uniform_horizon=false \
                 init_catt={c_init} init_dcatt={d_init}\
             "
-                        
+
             os.system(command)
 
             # take the result of the eval and save it to a json file
