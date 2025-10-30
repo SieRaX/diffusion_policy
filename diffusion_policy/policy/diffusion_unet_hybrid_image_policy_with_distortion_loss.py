@@ -38,6 +38,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
             eval_fixed_crop=False,
             distortion_loss_weight=0.01,
             distortion_ratio=0.001,
+            image_feature_dim=64,
             # parameters passed to step
             **kwargs):
         super().__init__()
@@ -76,6 +77,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         with config.unlocked():
             # set config with shape_meta
             config.observation.modalities.obs = obs_config
+            config.observation.encoder.rgb.core_kwargs.feature_dimension=image_feature_dim
 
             if crop_shape is None:
                 for key, modality in config.observation.encoder.items():

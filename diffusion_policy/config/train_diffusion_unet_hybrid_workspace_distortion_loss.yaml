@@ -50,6 +50,7 @@ policy:
   
   distortion_loss_weight: 0.01
   distortion_ratio: 0.001
+  image_feature_dim: 64
 
   # scheduler.step params
   # predict_epsilon: True
