@@ -13,8 +13,8 @@ init_dcatt: 5.0
 
 env_runner:
   _target_: diffusion_policy.env_runner.robomimic_lowdim_ADP_jumpying_disturbance_runner_by_avg_length.RobomimicLowdimRunner
-  n_test: 200
-  n_test_vis: 200
+  n_test: 100
+  n_test_vis: 100
   max_steps: 70
   n_action_steps: 3
   render_hw: [256,256]

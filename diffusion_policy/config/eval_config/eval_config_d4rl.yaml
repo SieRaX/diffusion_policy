@@ -13,16 +13,16 @@ init_dcatt: 5.0
 
 env_runner:
   _target_: diffusion_policy.env_runner.d4rl_lowdim_ADP_runner.D4RLLowdimRunner
-  n_test: 200
-  n_test_vis: 200
+  n_test: 100
+  n_test_vis: 100
   max_steps: 70
-  n_action_steps: 3
+  n_action_steps: 8
   render_hw: [256,256]
   fps: 20
   crf: 22
   n_envs: 28
   uniform_horizon: false
-  n_train: 0
+  n_train: 6
   n_train_vis: 0
   max_attention: 2.5
   min_n_action_steps: 2
