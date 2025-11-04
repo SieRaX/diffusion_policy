@@ -377,7 +377,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
             raise ValueError(f"Unsupported prediction type {pred_type}")
 
         ## calculating distortion loss
-        k = self.distortion_ratio
+        k = self.distortion_ratio**2
         distortion_loss_weight = self.distortion_loss_weight
         
         lowdim_dim = 0
