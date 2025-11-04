@@ -319,7 +319,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         horizon = nactions.shape[1]
 
         for key , item in nobs.items():
-            assert self.n_obs_steps * 2 == item.shape[1], f"n_obs_steps * 2 != nobs.shape[1]: {self.n_obs_steps * 2} != {item.shape[1]} in key: {key}"
+            assert self.n_obs_steps * 2 == item.shape[1], f"n_obs_steps * 2 != nobs.shape[1]: {self.n_obs_steps * 2} != {item.shape[1]} in key: {key}"  # This is for calculating the distortion loss of two consecutive observations
 
         # handle different ways of passing observation
         local_cond = None
