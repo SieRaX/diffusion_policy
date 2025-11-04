@@ -171,8 +171,8 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         self.obs_config = obs_config
         self.obs_key_shapes = obs_key_shapes
         self.distortion_loss_weight = distortion_loss_weight
-        self.distortion_ratio = distortion_ratio
-        # self.register_buffer('distortion_ratio', torch.tensor(distortion_ratio))
+        # self.distortion_ratio = distortion_ratio
+        self.register_parameter('distortion_ratio', torch.tensor(distortion_ratio, device=self.device))
 
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
