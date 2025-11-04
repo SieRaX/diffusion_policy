@@ -8,6 +8,7 @@ _target_: diffusion_policy.workspace.train_diffusion_unet_hybrid_workspace.Train
 task_name: ${task.name}
 shape_meta: ${task.shape_meta}
 exp_name: "default"
+action_dim: ${task.shape_meta.action.shape[0]}
 
 horizon: 16
 n_obs_steps: 2
@@ -17,6 +18,7 @@ dataset_obs_steps: ${eval:'${n_obs_steps}*2'}
 past_action_visible: False
 keypoint_visible_rate: 1.0
 obs_as_global_cond: True
+obs_dim: ${eval:'(${policy.image_feature_dim}*2+9)'} # 9 is the number of low_dim obs
 
 policy:
   _target_: diffusion_policy.policy.diffusion_unet_hybrid_image_policy_with_distortion_loss.DiffusionUnetHybridImagePolicy

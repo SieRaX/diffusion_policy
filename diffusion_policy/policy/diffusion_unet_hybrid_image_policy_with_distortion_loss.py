@@ -38,7 +38,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
             eval_fixed_crop=False,
             distortion_loss_weight=0.01,
             distortion_ratio=0.001,
-            image_feature_dim=64,
+            image_feature_dim=5,
             # parameters passed to step
             **kwargs):
         super().__init__()
@@ -172,6 +172,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         self.obs_key_shapes = obs_key_shapes
         self.distortion_loss_weight = distortion_loss_weight
         self.distortion_ratio = distortion_ratio
+        # self.register_buffer('distortion_ratio', torch.tensor(distortion_ratio))
 
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
@@ -411,6 +412,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
 
         self.extra_losses['distortion_loss'] = distortion_loss.mean().clone().detach().item()
         self.extra_losses['distortion'] = (feature_diff/(k*n_obs_diff)).mean().clone().detach().item()
+        self.extra_losses['k'] = k.clone().detach().item()
 
         return loss
 
