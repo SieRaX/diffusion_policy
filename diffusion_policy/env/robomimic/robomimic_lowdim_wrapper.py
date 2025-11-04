@@ -56,6 +56,8 @@ class RobomimicLowdimWrapper(gym.Env):
         self._seed = seed
     
     def reset(self, **kwargs):
+        if 'seed' in kwargs:
+            self._seed = kwargs['seed']
         if self.init_state is not None:
             # always reset to the same state
             # to be compatible with gym

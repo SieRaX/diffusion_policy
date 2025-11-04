@@ -9,6 +9,7 @@ from PIL import Image
 
 from diffusion_policy.env.d4rl.d4rl_lowdim_wrapper import D4RLLowdimWrapper
 from gymnasium_robotics.envs.adroit_hand.adroit_hammer import AdroitHandHammerEnv
+from gymnasium_robotics.envs.adroit_hand.adroit_door import AdroitHandDoorEnv
 
 def get_additional_info(env:gym.Env):
     
@@ -18,7 +19,13 @@ def get_additional_info(env:gym.Env):
         if type(mujoco_env) == AdroitHandHammerEnv:
             nail_pos = mujoco_env.data.site_xpos[mujoco_env.target_obj_site_id].ravel()
             goal_pos = mujoco_env.data.site_xpos[mujoco_env.goal_site_id].ravel()
-            return {'goal_distance': np.linalg.norm(nail_pos - goal_pos)}
+            return {'nail_distance': [np.linalg.norm(nail_pos - goal_pos), 0.01]}
+
+        elif type(mujoco_env) == AdroitHandDoorEnv:
+            door_pos = mujoco_env.data.qpos[mujoco_env.door_hinge_addrs]
+            return {'door_pos': [door_pos, 1.35]}
+
+        return dict()
         
     else:
         return dict()
@@ -61,7 +68,13 @@ class AttentionRecordingWrapper(gym.Wrapper):
     
     def render(self, mode='rgb_array', **kwargs):
 
-        assert self.attention_pred_list is not None and self.sample_triggered_list is not None, "attention_pred_list and sample_triggered_list must be set"
+        if self.attention_pred_list is not None and self.sample_triggered_list is not None:
+            pass
+
+        else:
+            self.attention_pred_list = np.zeros(self.max_timesteps)
+            self.sample_triggered_list = np.zeros(self.max_timesteps)
+            
         # assert len(self.additional_info) > 0, "additional_info must be set" # We don't need additional info assertion for rendering
 
         if mode == 'rgb_array':
@@ -80,7 +93,7 @@ class AttentionRecordingWrapper(gym.Wrapper):
             trigger_index = np.where(self.sample_triggered_list[:self.timestep])[0]
             ax.scatter(trigger_index, 
                       np.zeros_like(trigger_index), 
-                      color='green', s=30, marker='x')
+                      color='green', s=50, marker='x')
 
             fig.canvas.draw()
             graph_img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
@@ -90,12 +103,15 @@ class AttentionRecordingWrapper(gym.Wrapper):
             
             graph_imgs_additional_list = list()
             graph_widths_additional_list = list()
-            for key, value in self.additional_info.items():
+            for key, value_and_goal in self.additional_info.items():
+                value_and_goal = np.array(value_and_goal)
+                value = value_and_goal[:, 0]
+                goal = value_and_goal[:, 1]
                 fig, ax = plt.subplots(figsize=(4, 3))
                 ax.set_xlim(0, self.max_timesteps)
                 ax.set_ylim(bottom=0.0, top=max(value)+0.01)
                 ax.plot(np.arange(0, self.timestep), value, 'b-', linewidth=1)
-                ax.plot(np.arange(0, self.timestep), np.ones_like(value)*0.01, 'm--', linewidth=1)
+                ax.plot(np.arange(0, self.timestep), np.ones_like(value)*goal[0], 'm--', linewidth=1)
                 ax.set_xlabel('Time Step')
                 ax.set_title(key)
                 # ax.set_ylabel(key)

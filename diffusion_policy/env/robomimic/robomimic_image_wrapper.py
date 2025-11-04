@@ -77,6 +77,8 @@ class RobomimicImageWrapper(gym.Env):
         self._seed = seed
     
     def reset(self, **kwargs):
+        if 'seed' in kwargs:
+            self._seed = kwargs['seed']
         if self.init_state is not None:
             if not self.has_reset_before:
                 # the env must be fully reset at least once to ensure correct rendering

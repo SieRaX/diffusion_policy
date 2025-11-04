@@ -284,7 +284,7 @@ class MultiStepWrapper_Gymnasium(gym.Wrapper):
     def seed(self, seed=None):
         return self.env.seed(seed)
 
-class SubMultiStepWrapperwithDisturbance(MultiStepWrapper):
+class SubMultiStepWrapperwithDisturbance(MultiStepWrapper_Gymnasium):
     def __init__(self, 
             env, 
             n_obs_steps, 
