@@ -44,13 +44,19 @@ class RobomimicReplayImageDataset(BaseImageDataset):
             use_legacy_normalizer=False,
             use_cache=False,
             seed=42,
-            val_ratio=0.0
+            val_ratio=0.0,
+            info_keys=[],
+            additional_dataset_path=None
         ):
+        
+        assert (len(info_keys) == 0 and additional_dataset_path is None) or (len(info_keys) > 0 and additional_dataset_path is not None), f"info_keys: {info_keys}, additional_dataset_path: {additional_dataset_path}"
+        
         rotation_transformer = RotationTransformer(
             from_rep='axis_angle', to_rep=rotation_rep)
 
         replay_buffer = None
         if use_cache:
+            assert len(info_keys) == 0, "info_keys is not supported when use_cache is True"
             cache_zarr_path = dataset_path + '.zarr.zip'
             cache_lock_path = cache_zarr_path + '.lock'
             print('Acquiring lock on cache.')
@@ -65,7 +71,8 @@ class RobomimicReplayImageDataset(BaseImageDataset):
                             shape_meta=shape_meta, 
                             dataset_path=dataset_path, 
                             abs_action=abs_action, 
-                            rotation_transformer=rotation_transformer)
+                            rotation_transformer=rotation_transformer,
+                            info_keys=info_keys, additional_dataset_path=additional_dataset_path)
                         print('Saving cache to disk.')
                         with zarr.ZipStore(cache_zarr_path) as zip_store:
                             replay_buffer.save_to_store(
@@ -86,7 +93,8 @@ class RobomimicReplayImageDataset(BaseImageDataset):
                 shape_meta=shape_meta, 
                 dataset_path=dataset_path, 
                 abs_action=abs_action, 
-                rotation_transformer=rotation_transformer)
+                rotation_transformer=rotation_transformer,
+                info_keys=info_keys, additional_dataset_path=additional_dataset_path)
 
         rgb_keys = list()
         lowdim_keys = list()
@@ -132,6 +140,7 @@ class RobomimicReplayImageDataset(BaseImageDataset):
         self.pad_before = pad_before
         self.pad_after = pad_after
         self.use_legacy_normalizer = use_legacy_normalizer
+        self.info_keys = info_keys
 
     def get_validation_dataset(self):
         val_set = copy.copy(self)
@@ -182,6 +191,12 @@ class RobomimicReplayImageDataset(BaseImageDataset):
         # image
         for key in self.rgb_keys:
             normalizer[key] = get_image_range_normalizer()
+            
+        # additional info
+        for key in self.info_keys:
+            single_field_normalizer = SingleFieldLinearNormalizer()
+            normalizer[key] = single_field_normalizer.create_identity()
+            
         return normalizer
 
     def get_all_actions(self) -> torch.Tensor:
@@ -212,10 +227,16 @@ class RobomimicReplayImageDataset(BaseImageDataset):
         for key in self.lowdim_keys:
             obs_dict[key] = data[key][T_slice].astype(np.float32)
             del data[key]
+            
+        additional_info_dict = dict()
+        for key in self.info_keys:
+            additional_info_dict[key] = data[key][T_slice].astype(np.float32)
+            del data[key]
 
         torch_data = {
             'obs': dict_apply(obs_dict, torch.from_numpy),
-            'action': torch.from_numpy(data['action'].astype(np.float32))
+            'action': torch.from_numpy(data['action'].astype(np.float32)),
+            **(dict_apply(additional_info_dict, torch.from_numpy))
         }
         return torch_data
 
@@ -244,7 +265,7 @@ def _convert_actions(raw_actions, abs_action, rotation_transformer):
 
 
 def _convert_robomimic_to_replay(store, shape_meta, dataset_path, abs_action, rotation_transformer, 
-        n_workers=None, max_inflight_tasks=None):
+        n_workers=None, max_inflight_tasks=None, info_keys=[], additional_dataset_path=None):
     if n_workers is None:
         n_workers = multiprocessing.cpu_count()
     if max_inflight_tasks is None:
@@ -310,6 +331,26 @@ def _convert_robomimic_to_replay(store, shape_meta, dataset_path, abs_action, ro
                 compressor=None,
                 dtype=this_data.dtype
             )
+            
+        # save additional dataset
+        if additional_dataset_path is not None:
+            with h5py.File(additional_dataset_path) as additional_file:
+                additional_demos = additional_file['data']
+                for key in tqdm(info_keys, desc="Loading additional dataset"):
+                    this_data = list()
+                    for i in range(len(additional_demos)):
+                        demo = additional_demos[f'demo_{i}']
+                        this_data.append(demo[key][:].astype(np.float32))
+                    this_data = np.concatenate(this_data, axis=0)
+                    assert this_data.shape[0] == n_steps
+                    _ = data_group.array(
+                        name=key,
+                        data=this_data,
+                        shape=this_data.shape,
+                        chunks=this_data.shape,
+                        compressor=None,
+                        dtype=this_data.dtype
+                    )
         
         def img_copy(zarr_arr, zarr_idx, hdf5_arr, hdf5_idx):
             try:
