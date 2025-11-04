@@ -172,7 +172,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         self.obs_key_shapes = obs_key_shapes
         self.distortion_loss_weight = distortion_loss_weight
         # self.distortion_ratio = distortion_ratio
-        self.register_parameter('distortion_ratio', torch.tensor(distortion_ratio, device=self.device))
+        self.register_parameter('distortion_ratio', nn.Parameter(torch.tensor(distortion_ratio)))
 
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
@@ -387,13 +387,21 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         this_nobs_1 = dict_apply(nobs, 
             lambda x: x[:,:self.n_obs_steps,...].reshape(-1,*x.shape[2:]))
         nobs_features_1 = self.obs_encoder(this_nobs_1)
-        nobs_features_1[:, -9:] = nobs_features_1[:, -9:] * (k**0.5)
+        # Avoid inplace operation to preserve computation graph
+        nobs_features_1 = torch.cat([
+            nobs_features_1[:, :-9],
+            nobs_features_1[:, -9:] * (k**0.5)
+        ], dim=1)
         nobs_features_1 = nobs_features_1.reshape(batch_size, -1)
 
         this_nobs_2 = dict_apply(nobs,
             lambda x: x[:,self.n_obs_steps:self.n_obs_steps*2,...].reshape(-1,*x.shape[2:]))
         nobs_features_2 = self.obs_encoder(this_nobs_2)
-        nobs_features_2[:, -9:] = nobs_features_2[:, -9:] * (k**0.5)
+        # Avoid inplace operation to preserve computation graph
+        nobs_features_2 = torch.cat([
+            nobs_features_2[:, :-9],
+            nobs_features_2[:, -9:] * (k**0.5)
+        ], dim=1)
         nobs_features_2 = nobs_features_2.reshape(batch_size, -1)
 
         n_obs_diff = torch.zeros(size=(batch_size,), device=trajectory.device, dtype=trajectory.dtype)
