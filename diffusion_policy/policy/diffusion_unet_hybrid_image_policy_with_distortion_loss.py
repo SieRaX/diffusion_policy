@@ -172,7 +172,8 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         self.obs_key_shapes = obs_key_shapes
         self.distortion_loss_weight = distortion_loss_weight
         # self.distortion_ratio = distortion_ratio
-        self.register_parameter('distortion_ratio', nn.Parameter(torch.tensor(distortion_ratio)))
+        self.register_buffer('distortion_ratio', torch.tensor(distortion_ratio))
+        # self.register_parameter('distortion_ratio', nn.Parameter(torch.tensor(distortion_ratio)))
 
         if num_inference_steps is None:
             num_inference_steps = noise_scheduler.config.num_train_timesteps
@@ -377,7 +378,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
             raise ValueError(f"Unsupported prediction type {pred_type}")
 
         ## calculating distortion loss
-        k = self.distortion_ratio**2
+        # k = self.distortion_ratio
         distortion_loss_weight = self.distortion_loss_weight
         
         lowdim_dim = 0
@@ -390,7 +391,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         # Avoid inplace operation to preserve computation graph
         nobs_features_1 = torch.cat([
             nobs_features_1[:, :-9],
-            nobs_features_1[:, -9:] * (k**0.5)
+            nobs_features_1[:, -9:] * (self.distortion_ratio**0.5)
         ], dim=1)
         nobs_features_1 = nobs_features_1.reshape(batch_size, -1)
 
@@ -400,7 +401,7 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         # Avoid inplace operation to preserve computation graph
         nobs_features_2 = torch.cat([
             nobs_features_2[:, :-9],
-            nobs_features_2[:, -9:] * (k**0.5)
+            nobs_features_2[:, -9:] * (self.distortion_ratio**0.5)
         ], dim=1)
         nobs_features_2 = nobs_features_2.reshape(batch_size, -1)
 
@@ -410,7 +411,11 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
 
         feature_diff = (nobs_features_2 - nobs_features_1).norm(dim=-1)**2
 
-        distortion_loss = F.mse_loss(k*n_obs_diff, feature_diff, reduction='none')
+        # ema = 0.9999
+        # k_star = ((feature_diff*n_obs_diff).mean() / (n_obs_diff**2).mean()).detach()
+        # self.distortion_ratio = ema * self.distortion_ratio + (1-ema)*(k_star)
+        
+        distortion_loss = F.mse_loss(self.distortion_ratio*n_obs_diff, feature_diff, reduction='none')
         # distortion_loss = ((feature_diff / n_obs_diff)-1)**2
 
         loss = F.mse_loss(pred, target, reduction='none')
@@ -419,8 +424,9 @@ class DiffusionUnetHybridImagePolicy(BaseImagePolicy):
         loss = loss.mean() + distortion_loss_weight*distortion_loss.mean()
 
         self.extra_losses['distortion_loss'] = distortion_loss.mean().clone().detach().item()
-        self.extra_losses['distortion'] = (feature_diff/(k*n_obs_diff)).mean().clone().detach().item()
-        self.extra_losses['k'] = k.clone().detach().item()
+        self.extra_losses['distortion'] = (feature_diff/(self.distortion_ratio*n_obs_diff)).mean().clone().detach().item()
+        self.extra_losses['k'] = self.distortion_ratio.clone().detach().item()
+        # self.extra_losses['k_star'] = k_star.clone().detach().item()
 
         return loss
 
