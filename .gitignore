@@ -1,7 +1,9 @@
 bin
 logs
 wandb
-outputs
+outputs*
+notebook/
+*.ipynb
 data
 data_local
 .vscode
