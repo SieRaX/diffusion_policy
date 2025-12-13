@@ -24,5 +24,5 @@ class BaseImagePolicy(ModuleAttrMixin):
     def set_normalizer(self, normalizer: LinearNormalizer):
         raise NotImplementedError()
 
-    def get_extra_losses(self, batch):
+    def get_extra_losses(self):
         return {}
