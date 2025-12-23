@@ -328,7 +328,6 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper_Gymnasium):
             self.attention_pred_list = list()
             self.sample_triggered_list = list()
             self.c_att = None
-
             res = super().reset(**kwargs)
             return res
     
@@ -337,19 +336,19 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper_Gymnasium):
             self.c_att = c_att
         
     def register_horizon_idx(self, horizon_idx):
-        if not self.complete:
+        if len(self.done) == 0 or (not self.complete and not self.done[-1]):
             self.horizon_idx = horizon_idx
             self.horizon_idx_list.append(horizon_idx)
     
     def register_attention_pred(self, attention_pred):
-        if not self.complete:
+        if len(self.done) == 0 or (not self.complete and not self.done[-1]):
             self.attention_pred_list.append(attention_pred)
             sample_triggered = np.zeros(attention_pred.shape[0], dtype=np.bool)
             sample_triggered[0]=True
             self.sample_triggered_list.append(sample_triggered)
     
     def deregister_horizon_idx(self):
-        if not self.complete:
+        if len(self.done) == 0 or (not self.complete and not self.done[-1]):
             self.horizon_idx = None
 
     def step(self, action):

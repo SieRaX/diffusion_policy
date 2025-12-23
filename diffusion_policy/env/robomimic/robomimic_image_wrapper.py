@@ -60,6 +60,21 @@ class RobomimicImageWrapper(gym.Env):
             observation_space[key] = this_space
         self.observation_space = observation_space
 
+        self.time_step = 0
+        self.hover_trigger = False
+
+        if self.env.name == 'NutAssemblySquare':
+            def is_it_failed():
+                r_reach, r_grasp, r_lift, r_hover = self.env.env.staged_rewards()
+                if r_hover > 0.55:
+                    self.hover_trigger = True 
+                return not r_grasp > 0 and self.time_step > 120 and not self.hover_trigger
+        else:
+            def is_it_failed():
+                return False
+
+        self.is_it_failed = is_it_failed
+
 
     def get_observation(self, raw_obs=None):
         if raw_obs is None:
@@ -108,12 +123,17 @@ class RobomimicImageWrapper(gym.Env):
         # return obs
         obs = self.get_observation(raw_obs)
         state = self.env.get_state()['states']
+        self.time_step = 0
+        self.hover_trigger = False
         return obs, {"state_dict": state}
     
     def step(self, action):
-        raw_obs, reward, done, info = self.env.step(action)
+        raw_obs, reward, _ , info = self.env.step(action)
+        done = reward > 0 or self.is_it_failed()
+        
         obs = self.get_observation(raw_obs)
         info["state_dict"] = self.env.get_state()['states']
+        self.time_step += 1
         return obs, reward, done, False, info
     
     def render(self, mode='rgb_array'):

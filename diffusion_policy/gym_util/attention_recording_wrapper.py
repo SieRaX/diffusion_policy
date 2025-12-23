@@ -91,6 +91,27 @@ class AttentionRecordingWrapper(gym.Wrapper):
             ax.scatter(np.arange(0, self.timestep), self.attention_pred_list[:self.timestep], color='red', s=30)
 
             trigger_index = np.where(self.sample_triggered_list[:self.timestep])[0]
+
+            if len(trigger_index) == 1:
+                horizon_length = len(self.attention_pred_list)
+            else:
+                horizon_length = trigger_index[-1] - trigger_index[-2]
+
+            # Draw horizon_length in upper right corner of the graph
+            ax.annotate(
+                f"horizon_length: {horizon_length}",
+                xy=(1.0, 1.02),
+                xycoords='axes fraction',
+                fontsize=10,
+                ha='right',
+                va='bottom',
+                fontweight='bold',
+                color='black',
+                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray")
+            )
+
+            self.attention_length_before = len(self.attention_pred_list)
+            
             ax.scatter(trigger_index, 
                       np.zeros_like(trigger_index), 
                       color='green', s=50, marker='x')

@@ -24,10 +24,28 @@ import dill
 import wandb
 import json
 from diffusion_policy.workspace.base_workspace import BaseWorkspace
-from diffusion_policy.model.transformer import Seq2SeqTransformer
+from diffusion_policy.model.transformer import Seq2SeqTransformer, Seq2SeqTransformerWithVAE
 from diffusion_policy.model.common.normalizer import LinearNormalizer
 from diffusion_policy.policy.diffusion_unet_lowdim_policy import DiffusionUnetLowdimPolicy
+from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import DiffusionUnetHybridImagePolicy
 from omegaconf import OmegaConf
+
+# This process is needed to prevent the deadlock caused when try Image based env runner.
+'''
+# This is the anser from chat gpt
+AsyncVectorEnv uses multiprocessing (fork-based on Unix)
+It creates subprocesses that inherit the parent’s memory state.
+But Mujoco’s internal C/OpenGL contexts cannot be safely inherited. When a child process attempts to initialize a new MjSim (via robosuite.make()), it often deadlocks or hangs in the call to mujoco_py.MjSim(...).
+
+EGL or OpenGL context initialization happens per process
+Robosuite tries to create an offscreen renderer (EGL) or OpenGL context. In forked processes, this often causes the context creation call to block forever.
+
+egl_probe and GPU device selection make it worse
+The block might happen at egl_probe.get_available_devices() (or inside EGL initialization), especially if each process tries to access the same GPU EGL context.
+'''
+
+import multiprocessing as mp
+mp.set_start_method("spawn", force=True)
 
 # allows arbitrary python code execution in configs using the ${eval:''} resolver
 OmegaConf.register_new_resolver("eval", eval, replace=True)
@@ -64,8 +82,8 @@ def main(cfg: OmegaConf):
     payload = torch.load(open(checkpoint, 'rb'), pickle_module=dill)
     checkpoint_cfg = payload['cfg']
     # checkpoint_cfg.policy.n_action_steps = checkpoint_cfg.policy.horizon - checkpoint_cfg.policy.n_obs_steps
-    # checkpoint_cfg.task.env_runner.n_train = 2
-    # checkpoint_cfg.task.env_runner.n_train_vis = 1
+    # checkpoint_cfg.task.env_runner.n_train = 20
+    # checkpoint_cfg.task.env_runner.n_train_vis = 20
     # Change the noise_scheduler to ours
     # checkpoint_cfg.policy.noise_scheduler._target_ = 'diffusion_policy.schedulers.scheduling_ddpm.DDPMScheduler'
     # Change the env runner to ours
@@ -80,12 +98,32 @@ def main(cfg: OmegaConf):
     policy = workspace.model
     if checkpoint_cfg.training.use_ema:
         policy = workspace.ema_model
+    policy.n_action_steps = checkpoint_cfg.policy.horizon - checkpoint_cfg.policy.n_obs_steps
+    # Make sure that policy samples maximum length of action chunk.
+    # In ADP runner, Attention module decides the length of action chunk.
 
     normalizer = LinearNormalizer()
     normalizer.load_state_dict(torch.load(normalizer_dir, weights_only=False))
-    
-    attention_estimator = Seq2SeqTransformer(obs_dim=checkpoint_cfg.obs_dim*2, action_dim=checkpoint_cfg.action_dim, seq_len=checkpoint_cfg.policy.horizon)
-    attention_estimator.load_state_dict(torch.load(attention_estimator_dir, weights_only=False))
+
+    if 'obs_dim' in checkpoint_cfg:
+        obs_dim = checkpoint_cfg.obs_dim
+    else:
+        OmegaConf.set_struct(checkpoint_cfg, False)
+        from omegaconf import open_dict
+        with open_dict(checkpoint_cfg):
+            if 'image_feature_dim' not in checkpoint_cfg.policy:
+                checkpoint_cfg.policy.image_feature_dim = 5
+
+            if 'action_dim' not in checkpoint_cfg:
+                checkpoint_cfg.action_dim = checkpoint_cfg.task.shape_meta.action.shape[0]
+            obs_dim = checkpoint_cfg.policy.image_feature_dim * 2 + 9 ## This is only for robomimic tasks
+    try:
+        attention_estimator = Seq2SeqTransformer(obs_dim=obs_dim*2, action_dim=checkpoint_cfg.action_dim, seq_len=checkpoint_cfg.policy.horizon)
+        attention_estimator.load_state_dict(torch.load(attention_estimator_dir, weights_only=False))
+    except Exception as e:
+        print("\033[33mError loading attention estimator, Switching to Seq2SeqTransformerWithVisionEncoder\033[0m")
+        attention_estimator = Seq2SeqTransformerWithVAE(obs_dim=obs_dim*2, action_dim=checkpoint_cfg.action_dim, seq_len=checkpoint_cfg.policy.horizon)
+        attention_estimator.load_state_dict(torch.load(attention_estimator_dir, weights_only=False))
     
     device = torch.device(device)
     policy.to(device)
@@ -93,8 +131,8 @@ def main(cfg: OmegaConf):
     attention_estimator.to(device)
     attention_estimator.eval()
     
-    assert type(policy) == DiffusionUnetLowdimPolicy
-    assert type(attention_estimator) == Seq2SeqTransformer
+    assert type(policy) in [DiffusionUnetLowdimPolicy, DiffusionUnetHybridImagePolicy]
+    assert type(attention_estimator) == Seq2SeqTransformer or type(attention_estimator) == Seq2SeqTransformerWithVAE
     
     disturbance_generator = hydra.utils.instantiate(
         disturbance_cfg.generator)
