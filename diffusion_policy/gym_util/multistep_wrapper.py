@@ -303,6 +303,7 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper_Gymnasium):
         self.sample_triggered_list = list()
         self.complete = False
         self.c_att = None
+        self.grasp_signal = list()
 
     def set_invalid_env(self, is_it_invalid):
         if is_it_invalid:
@@ -328,6 +329,7 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper_Gymnasium):
             self.attention_pred_list = list()
             self.sample_triggered_list = list()
             self.c_att = None
+            self.grasp_signal = list()
             res = super().reset(**kwargs)
             return res
     
@@ -384,10 +386,11 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper_Gymnasium):
 
                 if self.disturbance_generator is not None:
                     new_state = self.disturbance_generator.generate_state_with_disturbance(self.env.env.env.env)
-                    self.env.env.env.env.reset_to(new_state)
+                    self.env.env.env.env.reset_to(new_state) ### I don't like here but we will leave it as it is for now.
 
                 self.obs.append(observation)
                 self.reward.append(reward)
+                self.grasp_signal.append(act[-1])
                 if (self.max_episode_steps is not None) \
                     and (len(self.reward) >= self.max_episode_steps):
                     # truncation
@@ -420,3 +423,28 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper_Gymnasium):
             # done = terminated or truncated
             info = dict_take_last_n(self.info, self.n_obs_steps)
             return observation, reward, terminated, truncated, info
+        
+    def get_grasp_signal(self):
+        # Calculate number of grasp attempts
+        # A grasp attempt is triggered when grasp signal transitions from -1 to 1
+        # and after that transition, 1 is applied more than 5 times
+        num_grasp_attempts = 0
+        if len(self.grasp_signal) >= 2:
+            i = 0
+            while i < len(self.grasp_signal) - 1:
+                # Check for transition from -1 to 1
+                if self.grasp_signal[i] < -0.7 and self.grasp_signal[i + 1] > 0.7:
+                    # Count consecutive 1s after the transition
+                    consecutive_ones = 1  # Start with the 1 at i+1
+                    j = i + 2
+                    while j < len(self.grasp_signal) and self.grasp_signal[j] > 0.7:
+                        consecutive_ones += 1
+                        j += 1
+                    # If more than 5 consecutive 1s, count as a grasp attempt
+                    if consecutive_ones > 1:
+                        num_grasp_attempts += 1
+                    i = j  # Skip past the consecutive 1s
+                else:
+                    i += 1
+                    
+        self.total_grasps = num_grasp_attempts

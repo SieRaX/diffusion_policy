@@ -95,7 +95,7 @@ class AttentionRecordingWrapper(gym.Wrapper):
             if len(trigger_index) == 1:
                 horizon_length = len(self.attention_pred_list)
             else:
-                horizon_length = trigger_index[-1] - trigger_index[-2]
+                horizon_length = len(self.attention_pred_list) - trigger_index[-1]
 
             # Draw horizon_length in upper right corner of the graph
             ax.annotate(
