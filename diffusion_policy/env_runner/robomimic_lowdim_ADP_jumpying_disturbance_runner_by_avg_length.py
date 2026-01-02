@@ -452,7 +452,13 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
 
                     # update pbar
                     pbar.refresh()
-                    pbar.n = min(env.call('get_attr', 'total_steps'))
+                    total_steps_arr = np.array(env.call('get_attr', 'total_steps'))
+                    not_complete_indices = complete.logical_not().numpy()
+                    filtered_steps = total_steps_arr[not_complete_indices]
+                    if filtered_steps.size == 0:
+                        pbar.n = max(total_steps_arr)
+                    else:
+                        pbar.n = max(filtered_steps)
                     pbar.refresh()
                     
                     

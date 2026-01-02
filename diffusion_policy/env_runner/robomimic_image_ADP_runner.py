@@ -316,6 +316,10 @@ class RobomimicImageRunner(BaseImageRunner):
             # while iteration < 2: ## Debug
                 # action_steps += 1 # this is for debug, erase after debugging
                 # print(f"Action steps: {action_steps}")
+                np.random.seed(seed)
+                torch.manual_seed(seed)
+                torch.cuda.manual_seed_all(seed)
+                
                 obs, _ = env.reset(seed=this_env_seeds)
                 # env.seed(this_env_seeds) # somehow, robomimic lowdim wrapper sets the seed to None after reset. So we give the seed again to the env.
                 past_action = None
@@ -430,7 +434,7 @@ class RobomimicImageRunner(BaseImageRunner):
                         number_of_attempts[indices_mask & big_step.logical_not()] += 1
                         c_att_array[indices_mask] -= dc_att_array[indices_mask]
                         
-                        indices_mask = ((horizon_length_avg > self.n_action_steps-0.5).logical_and(horizon_length_avg < self.n_action_steps+0.5))
+                        indices_mask = ((horizon_length_avg >= self.n_action_steps-0.5).logical_and(horizon_length_avg <= self.n_action_steps+0.5))
                         # complete[:] = False # reset complete... for sanity check
                         env.call_each('register_c_att', args_list=[[c_att_array_before_el] for c_att_array_before_el in c_att_array_before])
 
@@ -464,7 +468,13 @@ class RobomimicImageRunner(BaseImageRunner):
 
                     # update pbar
                     pbar.refresh()
-                    pbar.n = min(env.call('get_attr', 'total_steps'))
+                    total_steps_arr = np.array(env.call('get_attr', 'total_steps'))
+                    not_complete_indices = complete.logical_not().numpy()
+                    filtered_steps = total_steps_arr[not_complete_indices]
+                    if filtered_steps.size == 0:
+                        pbar.n = max(total_steps_arr)
+                    else:
+                        pbar.n = max(filtered_steps)
                     pbar.refresh()
                     
                     
