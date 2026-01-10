@@ -13,12 +13,16 @@ class RobomimicImageWrapper(gym.Env):
         env: EnvRobosuite,
         shape_meta: dict,
         init_state: Optional[np.ndarray]=None,
+        render_hw=(256,256),
         render_obs_key='agentview_image',
+        render_camera_name='agentview'
         ):
 
         self.env = env
         self.render_obs_key = render_obs_key
         self.init_state = init_state
+        self.render_hw = render_hw
+        self.render_camera_name = render_camera_name
         self.seed_state_map = dict()
         self._seed = None
         self.shape_meta = shape_meta
@@ -65,10 +69,11 @@ class RobomimicImageWrapper(gym.Env):
 
         if self.env.name == 'NutAssemblySquare':
             def is_it_failed():
-                r_reach, r_grasp, r_lift, r_hover = self.env.env.staged_rewards()
-                if r_hover > 0.55:
-                    self.hover_trigger = True 
-                return not r_grasp > 0 and self.time_step > 120 and not self.hover_trigger
+                # r_reach, r_grasp, r_lift, r_hover = self.env.env.staged_rewards()
+                # if r_hover > 0.55:
+                #     self.hover_trigger = True 
+                # return not r_grasp > 0 and self.time_step > 120 and not self.hover_trigger
+                return False
         else:
             def is_it_failed():
                 return False
@@ -137,11 +142,23 @@ class RobomimicImageWrapper(gym.Env):
         return obs, reward, done, False, info
     
     def render(self, mode='rgb_array'):
-        if self.render_cache is None:
-            raise RuntimeError('Must run reset or step before render.')
-        img = np.moveaxis(self.render_cache, 0, -1)
-        img = (img * 255).astype(np.uint8)
-        return img
+        # if self.render_cache is None:
+        #     raise RuntimeError('Must run reset or step before render.')
+        # img = np.moveaxis(self.render_cache, 0, -1)
+        # h, w = self.render_hw
+        # # Resize to (h, w) using numpy (nearest neighbor)
+        # orig_h, orig_w, c = img.shape
+        # if (orig_h, orig_w) != (h, w):
+        #     y_idx = (np.linspace(0, orig_h - 1, h)).astype(np.int32)
+        #     x_idx = (np.linspace(0, orig_w - 1, w)).astype(np.int32)
+        #     img = img[y_idx,:,:]
+        #     img = img[:,x_idx,:]
+        # img = (img * 255).astype(np.uint8)
+        # return img
+        h, w = self.render_hw
+        return self.env.render(mode=mode, 
+            height=h, width=w, 
+            camera_name=self.render_camera_name)
 
 
 if __name__ == '__main__':

@@ -433,15 +433,16 @@ class SubMultiStepWrapperwithDisturbance(MultiStepWrapper_Gymnasium):
             i = 0
             while i < len(self.grasp_signal) - 1:
                 # Check for transition from -1 to 1
-                if self.grasp_signal[i] < -0.7 and self.grasp_signal[i + 1] > 0.7:
+                if self.grasp_signal[i] < -0.01 and self.grasp_signal[i + 1] > 0.01:
                     # Count consecutive 1s after the transition
                     consecutive_ones = 1  # Start with the 1 at i+1
                     j = i + 2
-                    while j < len(self.grasp_signal) and self.grasp_signal[j] > 0.7:
-                        consecutive_ones += 1
+                    while j < len(self.grasp_signal) and self.grasp_signal[j] > 0.01:
+                        if self.grasp_signal[j] > 0.7:
+                            consecutive_ones += 1
                         j += 1
                     # If more than 5 consecutive 1s, count as a grasp attempt
-                    if consecutive_ones > 1:
+                    if consecutive_ones > 3:
                         num_grasp_attempts += 1
                     i = j  # Skip past the consecutive 1s
                 else:
