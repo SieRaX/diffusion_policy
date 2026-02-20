@@ -28,6 +28,7 @@ from diffusion_policy.model.transformer import Seq2SeqTransformer, Seq2SeqTransf
 from diffusion_policy.model.common.normalizer import LinearNormalizer
 from diffusion_policy.policy.diffusion_unet_lowdim_policy import DiffusionUnetLowdimPolicy
 from diffusion_policy.policy.diffusion_unet_hybrid_image_policy import DiffusionUnetHybridImagePolicy
+from diffusion_policy.policy.diffusion_unet_hybrid_image_policy_with_distortion_loss import DiffusionUnetHybridImagePolicy as DiffusionUnetHybridImagePolicyWithDistortionLoss
 from omegaconf import OmegaConf
 
 # This process is needed to prevent the deadlock caused when try Image based env runner.
@@ -72,8 +73,8 @@ def main(cfg: OmegaConf):
 
     # start_log.json works as an indicator that the evaluation is under process.
     # This will prevent other process to work on the same directory, or else, it might overwrite the exsiting logs.
-    if os.path.exists(os.path.join(output_dir, "start_log.json")):
-        click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
+    # if os.path.exists(os.path.join(output_dir, "start_log.json")):
+    #     click.confirm(f"Output path {output_dir} already exists! Overwrite?", abort=True)
     start_log = dict()
     start_log['command'] = ' '.join(sys.argv)
     json.dump(start_log, open(os.path.join(output_dir, "start_log.json"), "w"), indent=2, sort_keys=True)
@@ -123,7 +124,7 @@ def main(cfg: OmegaConf):
     except Exception as e:
         print("\033[33mError loading attention estimator, Switching to Seq2SeqTransformerWithVisionEncoder\033[0m")
         attention_estimator = Seq2SeqTransformerWithVAE(obs_dim=obs_dim*2, action_dim=checkpoint_cfg.action_dim, seq_len=checkpoint_cfg.policy.horizon)
-        attention_estimator.load_state_dict(torch.load(attention_estimator_dir, weights_only=False))
+        attention_estimator.load_state_dict(torch.load(attention_estimator_dir, weights_only=False, map_location="cpu"))
     
     device = torch.device(device)
     policy.to(device)
@@ -131,7 +132,7 @@ def main(cfg: OmegaConf):
     attention_estimator.to(device)
     attention_estimator.eval()
     
-    assert type(policy) in [DiffusionUnetLowdimPolicy, DiffusionUnetHybridImagePolicy]
+    assert type(policy) in [DiffusionUnetLowdimPolicy, DiffusionUnetHybridImagePolicy, DiffusionUnetHybridImagePolicyWithDistortionLoss], f"Policy type: {type(policy)} it should be in [DiffusionUnetLowdimPolicy, DiffusionUnetHybridImagePolicy, DiffusionUnetHybridImagePolicyWithDistortionLoss]"
     assert type(attention_estimator) == Seq2SeqTransformer or type(attention_estimator) == Seq2SeqTransformerWithVAE
     
     disturbance_generator = hydra.utils.instantiate(
