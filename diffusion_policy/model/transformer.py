@@ -267,19 +267,43 @@ class Seq2SeqTransformerWithVAE(nn.Module):
     def initialize_vae(self):
         assert self.vae_checkpoint is not None, f"VAE checkpoint is not provided."
 
-        if "14" in self.vae_checkpoint:
-            latent_dim = 14
+        if "lift" in self.vae_checkpoint or "can" in self.vae_checkpoint or "square" in self.vae_checkpoint:
             input_size = 84
-        elif "7" in self.vae_checkpoint:
-            latent_dim = 7
-            input_size = 84
-        elif "64" in self.vae_checkpoint:
-            latent_dim = 64
+        else:
             input_size = 240
+            
+        if "64" in self.vae_checkpoint:
+            latent_dim =64
+        elif "32" in self.vae_checkpoint:
+            latent_dim = 32
+        elif "16" in self.vae_checkpoint:
+            latent_dim = 16
+        elif "14" in self.vae_checkpoint:
+            latent_dim = 14
         else:
             raise ValueError(f"VAE checkpoint {self.vae_checkpoint} is not supported.")
+        # elif "14" in self.vae_checkpoint:
+        #     latent_dim = 14
+        #     input_size = 84
+        # elif "7" in self.vae_checkpoint:
+        #     latent_dim = 7
+        #     input_size = 84
+        # if "14" in self.vae_checkpoint:
+        #     latent_dim = 14
+        #     input_size = 84
+        # elif "7" in self.vae_checkpoint:
+        #     latent_dim = 7
+        #     input_size = 84
+        # elif "32" in self.vae_checkpoint:
+        #     latent_dim = 32
+        #     input_size = 84
+        # elif "64" in self.vae_checkpoint:
+        #     latent_dim = 64
+        #     input_size = 240
+        # else:
+        #     raise ValueError(f"VAE checkpoint {self.vae_checkpoint} is not supported.")
         self.vae = VAE(latent_dim=latent_dim, input_size=input_size)
-        self.vae.load_state_dict(torch.load(self.vae_checkpoint))
+        self.vae.load_state_dict(torch.load(self.vae_checkpoint, map_location="cpu"))
         
         self.encoder_initialized = True
         
