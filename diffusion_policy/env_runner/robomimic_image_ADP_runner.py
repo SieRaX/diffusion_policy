@@ -8,6 +8,7 @@ import tqdm
 import h5py
 import math
 import dill
+from copy import deepcopy
 import wandb.sdk.data_types.video as wv
 from diffusion_policy.gym_util.async_vector_env_gymnasium import AsyncVectorEnv
 # from diffusion_policy.gym_util.sync_vector_env import SyncVectorEnv
@@ -28,7 +29,7 @@ import robomimic.utils.file_utils as FileUtils
 import robomimic.utils.env_utils as EnvUtils
 import robomimic.utils.obs_utils as ObsUtils
 
-from diffusion_policy.env_runner.disturbance_generator.jumping_disturbance_generator import BaseDisturbanceGenerator
+from diffusion_policy.env_runner.disturbance_generator.base_disturbance_generator import BaseDisturbanceGenerator
 
 
 def create_env(env_meta, shape_meta, enable_render=True):
@@ -44,6 +45,17 @@ def create_env(env_meta, shape_meta, enable_render=True):
         use_image_obs=enable_render, 
     )
     return env
+
+
+def trim_to_cumulative_limit(lengths, limit=75):
+    total = 0
+    trimmed = []
+    for l in lengths:
+        if total + l > limit:
+            break
+        trimmed.append(l)
+        total += l
+    return trimmed
 
 
 class RobomimicImageRunner(BaseImageRunner):
@@ -64,6 +76,7 @@ class RobomimicImageRunner(BaseImageRunner):
             max_steps=400,
             n_obs_steps=2,
             n_action_steps=8,
+            render_hw=(256,256),
             render_obs_key='agentview_image',
             fps=10,
             crf=22,
@@ -96,6 +109,15 @@ class RobomimicImageRunner(BaseImageRunner):
         if abs_action:
             env_meta['env_kwargs']['controller_configs']['control_delta'] = False
             rotation_transformer = RotationTransformer('axis_angle', 'rotation_6d')
+            
+        if env_meta['env_name'] in ['NutAssembly', 'Lift', 'NutAssemblySquare', 'ToolHang']:
+            self.slice = slice(10, 17)
+        elif env_meta['env_name'] == 'PickPlaceCan':
+            self.slice = slice(31, 38)
+        else:
+            raise ValueError(f"Unknown environment: {env_meta['env_name']}")
+        
+        disturbance_generator.slice = self.slice
 
         def env_fn():
             robomimic_env = create_env(
@@ -131,7 +153,8 @@ class RobomimicImageRunner(BaseImageRunner):
                 ),
                 n_obs_steps=n_obs_steps,
                 n_action_steps=n_action_steps,
-                max_episode_steps=max_steps
+                max_episode_steps=max_steps,
+                disturbance_generator=disturbance_generator
             )
         
         # For each process the OpenGL context can only be initialized once
@@ -151,7 +174,8 @@ class RobomimicImageRunner(BaseImageRunner):
                         env=robomimic_env,
                         shape_meta=shape_meta,
                             init_state=None,
-                            render_obs_key=render_obs_key
+                            render_obs_key=render_obs_key,
+                            render_hw=render_hw
                         ),
                         max_timesteps=max_steps,
                         max_attention=max_attention
@@ -274,6 +298,7 @@ class RobomimicImageRunner(BaseImageRunner):
         all_c_att_array = [None] * n_inits
         all_dc_att_array = [None] * n_inits
         all_horizon_length_avg = [None] * n_inits
+        all_grasp_attempts = [None] * n_inits
 
         for chunk_idx in range(n_chunks):
             start = chunk_idx * n_envs
@@ -413,10 +438,17 @@ class RobomimicImageRunner(BaseImageRunner):
                     if done:
                         c_att_array_before = c_att_array.clone()
                         
-                        horizon_length_lst = env.call('get_attr', 'horizon_idx_list')
+                        horizon_length_lst_original = env.call('get_attr', 'horizon_idx_list')
+
+                        # if self.env_meta['env_name'] == 'PickPlaceCan':
+                        if False:
+                            horizon_length_lst = [trim_to_cumulative_limit(arr, 75) for arr in horizon_length_lst_original]
+                        else:
+                            horizon_length_lst = deepcopy(horizon_length_lst_original)
 
                         # horizon_length_lst = torch.stack(horizon_length_lst, dim=1)
-                        horizon_length_avg = torch.tensor([torch.tensor(arr, dtype=torch.float).mean().item() for arr in horizon_length_lst])
+                        horizon_length_avg = torch.tensor([torch.tensor(arr if len(arr) < 3 else arr[:-1], dtype=torch.float).mean().item() for arr in horizon_length_lst])
+                        original_horizon_length_avg = torch.tensor([torch.tensor(arr if len(arr) < 3 else arr[:-1], dtype=torch.float).mean().item() for arr in horizon_length_lst_original])
                         
                         indices_mask = ((horizon_length_avg < self.n_action_steps-0.5).logical_and(complete.logical_not()))
                         big_step_mask = (indices_mask & (plus_minus_mask < 0))
@@ -472,9 +504,9 @@ class RobomimicImageRunner(BaseImageRunner):
                     not_complete_indices = complete.logical_not().numpy()
                     filtered_steps = total_steps_arr[not_complete_indices]
                     if filtered_steps.size == 0:
-                        pbar.n = max(total_steps_arr)
+                        pbar.n = min(total_steps_arr)
                     else:
-                        pbar.n = max(filtered_steps)
+                        pbar.n = min(filtered_steps)
                     pbar.refresh()
                     
                     
@@ -491,8 +523,10 @@ class RobomimicImageRunner(BaseImageRunner):
 
                     all_c_att_array[this_global_slice] = env.call('get_attr', 'c_att')[this_local_slice]
                     all_dc_att_array[this_global_slice] = dc_att_array
-                    all_horizon_length_avg[this_global_slice] = horizon_length_avg
+                    all_horizon_length_avg[this_global_slice] = original_horizon_length_avg
 
+                    env.call_each('get_grasp_signal')
+                    all_grasp_attempts[this_global_slice] = env.call('get_attr', 'total_grasps')[this_local_slice]
                     ## set the complete to False for all envs so we can start new chunk
                     env.call_each('set_complete', args_list=[[False] for _ in range(n_envs)])
 
@@ -501,6 +535,7 @@ class RobomimicImageRunner(BaseImageRunner):
             find_catt_bar.close()
         # log
         max_rewards = collections.defaultdict(list)
+        number_of_grasp_attempts = collections.defaultdict(list)
         log_data = dict()
         # results reported in the paper are generated using the commented out line below
         # which will only report and average metrics from first n_envs initial condition and seeds
@@ -518,6 +553,8 @@ class RobomimicImageRunner(BaseImageRunner):
             log_data[prefix+f'sim_max_reward_{seed}'] = max_reward
             log_data[prefix+f'sim_catt_{seed}'] = all_c_att_array[i].item()
             log_data[prefix+f'sim_horizon_avg_length_{seed}'] = all_horizon_length_avg[i].item()
+            log_data[prefix+f'sim_number_of_grasp_attempts_{seed}'] = all_grasp_attempts[i]
+            number_of_grasp_attempts[prefix].append(all_grasp_attempts[i])
 
             # visualize sim
             video_path = all_video_paths[i]
@@ -535,6 +572,12 @@ class RobomimicImageRunner(BaseImageRunner):
             name = prefix+'mean_score_valid'
             value = np.mean(value_el[~(value_el<0)])
             log_data[name] = value
+            
+            if isinstance(self.disturbance_generator, BaseDisturbanceGenerator):
+                name = prefix+'mean_score_with_single_grasp'
+                grasp_attempts_el = np.array(number_of_grasp_attempts[prefix])
+                value = np.mean(value_el[~(value_el<0)] * (grasp_attempts_el[~(value_el<0)] == 1))
+                log_data[name] = value
 
         return log_data
 

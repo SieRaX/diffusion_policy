@@ -25,7 +25,7 @@ from diffusion_policy.model.transformer import Seq2SeqTransformer
 import robomimic.utils.file_utils as FileUtils
 import robomimic.utils.env_utils as EnvUtils
 import robomimic.utils.obs_utils as ObsUtils
-from diffusion_policy.env_runner.disturbance_generator.jumping_disturbance_generator import BaseDisturbanceGenerator, JumpingDisturbanceGenerator
+from diffusion_policy.env_runner.disturbance_generator.base_disturbance_generator import BaseDisturbanceGenerator
 
 def create_env(env_meta, obs_keys):
     ObsUtils.initialize_obs_modality_mapping_from_dict(
@@ -409,7 +409,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                         horizon_length_lst = env.call('get_attr', 'horizon_idx_list')
 
                         # horizon_length_lst = torch.stack(horizon_length_lst, dim=1)
-                        horizon_length_avg = torch.tensor([torch.tensor(arr, dtype=torch.float).mean().item() for arr in horizon_length_lst])
+                        horizon_length_avg = torch.tensor([torch.tensor(arr if len(arr) < 3 else arr[:-1], dtype=torch.float).mean().item() for arr in horizon_length_lst])
                         
                         indices_mask = ((horizon_length_avg < self.n_action_steps-0.5).logical_and(complete.logical_not()))
                         big_step_mask = (indices_mask & (plus_minus_mask < 0))
@@ -469,6 +469,8 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
                 # find_catt_bar.n = indices_mask.sum().item() # for sanity check
                 find_catt_bar.refresh()
                 # collect data for this round
+                # complete[:] = True ## For figure debugging remove this line
+                # breakpoint()
                 if torch.all(complete):
                     all_video_paths[this_global_slice] = env.render()[this_local_slice]
                     all_rewards[this_global_slice] = env.call('get_attr', 'reward')[this_local_slice]
@@ -524,7 +526,7 @@ class RobomimicLowdimRunner(BaseLowdimRunner):
             value = np.mean(value_el[~(value_el<0)])
             log_data[name] = value
             
-            if type(self.disturbance_generator) == JumpingDisturbanceGenerator:
+            if isinstance(self.disturbance_generator, BaseDisturbanceGenerator):
                 name = prefix+'mean_score_with_single_grasp'
                 grasp_attempts_el = np.array(number_of_grasp_attempts[prefix])
                 value = np.mean(value_el[~(value_el<0)] * (grasp_attempts_el[~(value_el<0)] == 1))
