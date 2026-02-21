@@ -4,4 +4,4 @@ generator:
   _target_: diffusion_policy.env_runner.disturbance_generator.jumping_disturbance_generator.JumpingDisturbanceGenerator
   speed: 0.03
   max_number_of_disturbance: 1
-  distance_threshold: 0.025
+  distance_threshold: 0.05

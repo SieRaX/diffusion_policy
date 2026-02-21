@@ -17,6 +17,7 @@ env_runner:
   n_test_vis: 100
   max_steps: 70
   n_action_steps: 3
+  render_hw: [256,256]
   fps: 10
   crf: 22
   n_envs: 28
