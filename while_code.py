@@ -28,7 +28,9 @@ import time
 
 def main():
     
-    # Here is the paths to the model
+    """
+    Loading the modelss
+    """
     checkpoint_path = "outputs_HDD3/lift_lowdim_ph_reproduction/train_by_seed_ddpm/seed_0_2025.07.30-23.38.46_train_diffusion_unet_lowdim_lift_lowdim_cnn_32/checkpoints/epoch=0100-test_mean_score=1.000.ckpt"
     attention_estimator_dir = "outputs_HDD3/cge/lift_lowdim_abs_ph/train_by_seed/seed_0_2025.08.25_18.54.37_train_conditional_gradient_lowdim_lift_lowdim_abs/dataset_with_spatial_attention_attention_at_info_time_0.1/seq2seq_attention_estimator.pth"
     normalizer_dir = "outputs_HDD3/cge/lift_lowdim_abs_ph/train_by_seed/seed_0_2025.08.25_18.54.37_train_conditional_gradient_lowdim_lift_lowdim_abs/dataset_with_spatial_attention_attention_at_info_time_0.1/normalizer.pth"
