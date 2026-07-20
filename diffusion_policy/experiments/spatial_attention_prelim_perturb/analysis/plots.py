@@ -82,8 +82,10 @@ def plot_timeline(data, space, out_dir, yscale='log'):
         ax.grid(True, alpha=0.25)
     ax.set_xlabel('episode timestep t')
     ax.set_ylabel(f'coupled endpoint distance ({space})')
+    grip_suffix = '' if (bool(data['include_gripper']) if 'include_gripper' in data else True) \
+        else ' (gripper excluded)'
     ax.set_title(f"Perturbation sensitivity vs timestep — {data['task_name']} "
-                 f"/ {data['obs_variant']} [{space}]")
+                 f"/ {data['obs_variant']} [{space}]{grip_suffix}")
     ax.legend(fontsize=8, ncol=2)
     fig.tight_layout(); fig.savefig(path, dpi=120); plt.close(fig)
     return path

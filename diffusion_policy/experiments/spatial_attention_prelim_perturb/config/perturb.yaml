@@ -24,6 +24,9 @@ M: null                      # ODE steps; null -> policy.num_inference_steps
 
 history_mode: tile_perturbed # tile_perturbed | consistent_perturbed | current_frame_only
 distance_space: both         # both | raw | norm
+include_gripper: true        # false -> exclude the gripper action dim (the LAST dim, robomimic
+                             # convention) from the distance, so S reflects only arm pos/rot.
+                             # The gripper's near-binary open/close switch otherwise dominates S.
 
 # Grasp detection is shared: it shades the figures under BOTH backends, and drives
 # the grasp-aware coupling of the sim_state backend. object_bodies overrides which

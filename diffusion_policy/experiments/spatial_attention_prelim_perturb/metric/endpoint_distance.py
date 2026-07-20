@@ -33,12 +33,15 @@ SPACES = ('raw', 'norm')
 
 
 class CoupledEndpointDistance:
-    def __init__(self, crn, ode_steps, distance_space='both', max_batch=64):
+    def __init__(self, crn, ode_steps, distance_space='both', max_batch=64, action_dims=None):
         self.crn = crn
         self.ode_steps = int(ode_steps)
         assert distance_space in ('both', 'raw', 'norm')
         self.spaces = SPACES if distance_space == 'both' else (distance_space,)
         self.max_batch = int(max_batch)
+        # optional subset of action dims the distance is measured over (None = all dims).
+        # e.g. drop the gripper channel, whose near-binary switch otherwise dominates S.
+        self.action_dims = list(action_dims) if action_dims is not None else None
 
     @torch.no_grad()
     def _sample(self, policy, obs_dict):
@@ -60,11 +63,12 @@ class CoupledEndpointDistance:
             norm_chunks.append(out['naction_pred'].double().cpu())    # (c, H, D)
         return {'raw': torch.cat(raw_chunks, 0), 'norm': torch.cat(norm_chunks, 0)}
 
-    @staticmethod
-    def _reduce(samp_pert, samp_nom, start):
+    def _reduce(self, samp_pert, samp_nom, start):
         """Given two (N,H,D) sample sets, return (D_scalar, per_index (H,), first_scalar)
-        using sum-of-squares over (H,D), mean over N."""
+        using sum-of-squares over (H, selected D), mean over N."""
         diff2 = (samp_pert - samp_nom) ** 2                # (N, H, D)
+        if self.action_dims is not None:
+            diff2 = diff2[..., self.action_dims]           # measure only the selected action dims
         per_index = diff2.sum(dim=2).mean(dim=0).numpy()   # (H,)  sum over D, mean over N
         d_scalar = float(per_index.sum())                  # sum over H  == Σ_k per_index[k]
         first_scalar = float(per_index[start])             # executed-slice first action

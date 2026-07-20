@@ -51,7 +51,9 @@ def analyze(npz_path, output_dir, yscale='log'):
              f"(abs_action={bool(data['abs_action'])})\n"]
     lines.append(f"- demo {int(data['demo_index'])}, episode length {int(data['episode_length'])}, "
                  f"evaluated {len(data['timesteps'])} timesteps (stride implied)")
-    lines.append(f"- backend: {backend}, history_mode: {data['history_mode']}, distance spaces: {spaces}")
+    ig = bool(data['include_gripper']) if 'include_gripper' in data else True
+    lines.append(f"- backend: {backend}, history_mode: {data['history_mode']}, distance spaces: {spaces}, "
+                 f"gripper {'included' if ig else 'EXCLUDED'}")
     lines.append(f"- K={int(data['K'])}, N={int(data['N'])}, M={int(data['M'])}, "
                  f"executed_start={int(data['executed_start'])}, H={int(data['horizon'])}, D={int(data['action_dim'])}")
     if backend == 'obs_noise':

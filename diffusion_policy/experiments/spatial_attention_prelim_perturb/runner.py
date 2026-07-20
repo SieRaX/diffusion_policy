@@ -125,9 +125,13 @@ def run(cfg):
     N = int(cfg.N)
     M = int(cfg.M) if cfg.get('M', None) is not None else int(policy.num_inference_steps)
     crn = CRNManager(k_s=N, horizon=H, action_dim=Da, eps0_seed=int(cfg.seeds.crn))
+    # optionally drop the gripper channel (the LAST action dim, robomimic convention:
+    # [pos, rot, gripper]) so S reflects only arm motion, not the gripper open/close switch.
+    include_gripper = bool(cfg.get('include_gripper', True))
+    action_dims = None if include_gripper else list(range(Da - 1))
     metric = CoupledEndpointDistance(crn, ode_steps=M,
                                      distance_space=cfg.distance_space,
-                                     max_batch=int(cfg.max_batch))
+                                     max_batch=int(cfg.max_batch), action_dims=action_dims)
 
     # --- perturbation backend (sim_state | obs_noise), selected purely by config ---
     K = int(cfg.K)
@@ -176,6 +180,7 @@ def run(cfg):
         executed_start=np.int64(To - 1), horizon=np.int64(H), action_dim=np.int64(Da),
         K=np.int64(K), N=np.int64(N), M=np.int64(M),
         history_mode=str(cfg.history_mode), perturbation_backend=str(backend.name),
+        include_gripper=bool(include_gripper),
         seed_perturb=np.int64(cfg.seeds.perturb), seed_crn=np.int64(cfg.seeds.crn),
         control_stride=np.int64(cfg.control_stride), config_hash=str(cfg_hash),
     )

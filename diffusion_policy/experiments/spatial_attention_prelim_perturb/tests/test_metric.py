@@ -73,6 +73,20 @@ def test_per_index_sum_equals_scalar_and_space_relation():
     assert res['norm']['S'] > 0.0               # sensitive to the input change
 
 
+def test_action_dims_subset_excludes_gripper():
+    p = DummyPerturbPolicy()
+    nom = {'obs': torch.zeros(1, To, 5)}
+    pert = [{'obs': torch.full((1, To, 5), 0.3)}]
+    crn = CRNManager(k_s=8, horizon=H, action_dim=D, eps0_seed=0)
+    full = CoupledEndpointDistance(crn, 5, 'norm').compute(p, nom, pert)
+    sub = CoupledEndpointDistance(crn, 5, 'norm', action_dims=list(range(D - 1))).compute(p, nom, pert)
+    # the dummy shifts every action dim equally, so dropping 1 of D dims scales S by (D-1)/D
+    assert abs(sub['norm']['S'] - full['norm']['S'] * (D - 1) / D) < 1e-6
+    assert sub['norm']['S'] < full['norm']['S']
+    assert sub['norm']['per_index'].shape == (H,)          # still summed per horizon index
+    assert abs(sub['norm']['per_index'].sum() - sub['norm']['S']) < 1e-8
+
+
 def test_both_matches_single_space_runs():
     p = DummyPerturbPolicy()
     nom = {'obs': torch.zeros(1, To, 5)}
