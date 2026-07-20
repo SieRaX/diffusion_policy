@@ -1,6 +1,17 @@
-# Perturbation-sensitivity measurement — MEASUREMENT PARAMETERS ONLY.
+# Perturbation-sensitivity measurement — SHARED MEASUREMENT PARAMETERS ONLY.
 # Task / obs variant / dataset / n_obs_steps / horizon / abs_action are DERIVED
 # FROM THE CHECKPOINT, never configured here.
+#
+# The perturbation strategy is a hydra config GROUP: `perturbation_backend`.
+#   perturbation_backend=sim_state  (DEFAULT) grasp-aware SE(3) state perturbation
+#   perturbation_backend=obs_noise            additive Gaussian obs-vector noise (low_dim only)
+# Switch backends with a SINGLE override, e.g. `perturbation_backend=obs_noise`.
+# Backend-specific params live under their sub-config (config/perturbation_backend/);
+# the params below are shared and apply to both backends identically.
+
+defaults:
+  - _self_
+  - perturbation_backend: sim_state
 
 checkpoint: ???              # path to a flow-matching .ckpt (required)
 dataset_path_override: null  # only if the training-time dataset path is invalid here
@@ -11,44 +22,36 @@ K: 8                         # perturbations per timestep
 N: 16                        # fixed CRN initial noises {eps0_j}
 M: null                      # ODE steps; null -> policy.num_inference_steps
 
-sigma_pos:                   # position noise std (meters)
-  eef: 0.005
-  object: 0.005
-sigma_rot:                   # orientation noise std (radians)
-  eef: 0.02
-  object: 0.02
-sigma_qpos: 0.01             # arm-joint noise std (radians) for the 'eef' source (JOINT-space;
-                             # the induced EEF Cartesian shift depends on the arm configuration)
-per_body_sigma: null         # optional {body_name: {sigma_pos, sigma_rot}} for non-grasped bodies
-
-object_bodies: null          # optional {task_base: [object_name, ...]} override of the per-task lookup
-perturb_targets: [eef, objects]  # default: both. Options objects | eef | [eef, objects].
-                             #   eef: Gaussian noise on the arm qpos (moves the end-effector, IK-free);
-                             #        grasped bodies follow the EEF's induced transform.
-                             #   objects: perturb free bodies (grasped -> follow the EEF ΔT,
-                             #            non-grasped -> independent noise).
-                             #   Use [objects] for objects-only (EEF obs held fixed).
 history_mode: tile_perturbed # tile_perturbed | consistent_perturbed | current_frame_only
 distance_space: both         # both | raw | norm
+
+# Grasp detection is shared: it shades the figures under BOTH backends, and drives
+# the grasp-aware coupling of the sim_state backend. object_bodies overrides which
+# bodies are resolved (and thus grasp-checked), so it is shared too.
 grasp_qpos_threshold: 0.06   # heuristic: sum(|finger qpos|) below this == closed (Panda-specific)
-settle_steps: 0              # >0 would change the probed state (do not settle)
-source: dataset              # dataset only; TODO: rollout would need measurement isolation
+object_bodies: null          # optional {task_base: [object_name, ...]} override of the per-task lookup
 
 control_stride: 10           # nominal-vs-nominal control every control_stride-th evaluated step
 seeds:
-  perturb: 0
-  crn: 0
+  perturb: 0                 # sim_state per-timestep perturbation seed (obs_noise uses its own `seed`)
+  crn: 0                     # the {eps0_j} seed (fixed CRN initial noises)
   crn_control: 1             # reserved
 
 device: cuda:0
 max_batch: 64                # cap on the (samples) batch per predict_action call
-output_dir: null             # base dir; null -> <checkpoint-without-extension>/
-                             # prelim_perturb_<task>_<abs|rel> . episode_<demo_index>
-                             # is ALWAYS appended under the base.
+output_dir: ???              # REQUIRED. Results + Hydra's .hydra snapshot both go here
+                             # (hydra.run.dir=${output_dir}). e.g. <checkpoint-without-extension>/
+                             # prelim_perturb_<task>_<abs|rel>/<backend>/episode_<demo_index>
 
 hydra:
+  # Hydra owns the run dir (like train.py): run.dir=${output_dir} makes Hydra write
+  # its default .hydra/{config,hydra,overrides}.yaml snapshot INTO the results
+  # directory. output_dir is REQUIRED (no fallback). output_subdir stays at its
+  # default (.hydra).
   job:
     chdir: false
   run:
-    dir: .
-  output_subdir: null
+    dir: ${output_dir}
+  sweep:
+    dir: ${output_dir}
+    subdir: ${hydra.job.num}

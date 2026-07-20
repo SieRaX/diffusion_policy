@@ -31,6 +31,7 @@ def analyze(npz_path, output_dir, yscale='log'):
     os.makedirs(output_dir, exist_ok=True)
     data = _load(npz_path)
     spaces = [str(s) for s in data['distance_spaces']]
+    backend = str(data.get('perturbation_backend', 'sim_state'))  # old npz -> sim_state
 
     figs = []
     for sp in spaces:
@@ -50,16 +51,25 @@ def analyze(npz_path, output_dir, yscale='log'):
              f"(abs_action={bool(data['abs_action'])})\n"]
     lines.append(f"- demo {int(data['demo_index'])}, episode length {int(data['episode_length'])}, "
                  f"evaluated {len(data['timesteps'])} timesteps (stride implied)")
-    lines.append(f"- history_mode: {data['history_mode']}, perturb_targets: {list(data['perturb_targets'])}, "
-                 f"distance spaces: {spaces}")
+    lines.append(f"- backend: {backend}, history_mode: {data['history_mode']}, distance spaces: {spaces}")
     lines.append(f"- K={int(data['K'])}, N={int(data['N'])}, M={int(data['M'])}, "
                  f"executed_start={int(data['executed_start'])}, H={int(data['horizon'])}, D={int(data['action_dim'])}")
-    lines.append(f"- sigmas: pos(eef={data['sigma_pos_eef']}, obj={data['sigma_pos_object']}) "
-                 f"rot(eef={data['sigma_rot_eef']}, obj={data['sigma_rot_object']}); "
-                 f"seeds perturb={int(data['seed_perturb'])} crn={int(data['seed_crn'])}")
+    if backend == 'obs_noise':
+        nm = str(data.get('noise_mode', 'per_dim_std'))
+        detail = (f"noise_scale={float(data['noise_scale'])}" if nm == 'per_dim_std'
+                  else f"sigma_abs={float(data['sigma_abs'])}")
+        mask = np.asarray(data['noise_dim_mask'], dtype=bool) if 'noise_dim_mask' in data else None
+        ndims = f"{int(mask.sum())}/{mask.size}" if mask is not None else "all"
+        lines.append(f"- obs_noise: mode={nm}, {detail}, noised {ndims} obs dims; "
+                     f"delta seed={int(data.get('noise_seed', -1))}, eps0 seed={int(data['seed_crn'])}")
+    else:
+        lines.append(f"- perturb_targets: {list(data['perturb_targets'])}; "
+                     f"sigmas: pos(eef={data['sigma_pos_eef']}, obj={data['sigma_pos_object']}) "
+                     f"rot(eef={data['sigma_rot_eef']}, obj={data['sigma_rot_object']}); "
+                     f"seeds perturb={int(data['seed_perturb'])} crn={int(data['seed_crn'])}")
     lines.append(f"- bodies: {list(data['body_names'])}; grasped in {int(grasped.sum())}/"
                  f"{len(grasped)} evaluated steps")
-    if list(data['perturb_targets']) == ['objects']:
+    if backend != 'obs_noise' and list(data['perturb_targets']) == ['objects']:
         lines.append("- **perturb_targets fallback**: objects-only (no EEF/arm perturbation; EEF obs held "
                      "fixed — grasped-body perturbation is not a full physical grasp motion).")
     lines.append("")

@@ -129,6 +129,20 @@ def detect_grasp_flags(wrapper, states, t, bodies, grasp_qpos_threshold):
     return [is_grasped(rs_env, sim, b, grasp_qpos_threshold) for b in bodies]
 
 
+def lowdim_obs_key_ranges(wrapper):
+    """Map each low_dim obs key to its ``[start, end)`` index range in the
+    concatenated observation vector (concatenation order = ``wrapper.obs_keys``).
+    Used to resolve obs-key names in the obs_noise backend's ``noise_dim_mask``."""
+    raw = wrapper.env.get_observation()
+    ranges = {}
+    cur = 0
+    for key in wrapper.obs_keys:
+        dim = int(np.asarray(raw[key]).reshape(-1).shape[0])
+        ranges[key] = (cur, cur + dim)
+        cur += dim
+    return ranges
+
+
 # ---------------------------------------------------------------- input builder
 def _extract_frame(wrapper, states, idx, applier):
     wrapper.env.reset_to({'states': states[idx]})

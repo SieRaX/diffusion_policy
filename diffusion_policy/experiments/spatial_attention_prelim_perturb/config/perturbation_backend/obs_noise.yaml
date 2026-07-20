@@ -1,0 +1,14 @@
+# @package perturbation_backend
+# Additive Gaussian noise on the observation vector (LOW_DIM checkpoints ONLY).
+# Perturbed side: o'_k = o + delta_k, delta_k ~ N(0, diag(sigma^2)); no simulator
+# reset / grasp / SE(3) for the perturbed inputs (strictly cheaper than sim_state).
+# The K draws {delta_k} are drawn ONCE from `seed` and reused across all timesteps.
+name: obs_noise
+
+noise_mode: per_dim_std      # per_dim_std (DEFAULT): sigma_d = noise_scale * std_d
+                             # isotropic:              sigma_d = sigma_abs (all dims)
+noise_scale: 0.1             # per_dim_std: fraction of each dim's training-obs std
+sigma_abs: 0.01              # isotropic: absolute per-dim std (same for every dim)
+noise_dim_mask: null         # optional list of obs-dim indices or obs-key names to noise
+                             # (null -> all dims); key names resolved via the checkpoint's obs keys
+seed: 0                      # fixed seed for the {delta_k} draw (reused across all timesteps)

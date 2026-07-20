@@ -20,9 +20,7 @@ from diffusion_policy.experiments.spatial_attention_prelim_perturb.metric.endpoi
     CoupledEndpointDistance,
 )
 from diffusion_policy.experiments.spatial_attention_prelim_perturb.perturbation import bodies as bodies_mod
-from diffusion_policy.experiments.spatial_attention_prelim_perturb.perturbation.state_perturb import (
-    sample_realization,
-)
+from diffusion_policy.experiments.spatial_attention_prelim_perturb.perturbation.backend import make_backend
 from diffusion_policy.experiments.spatial_attention_prelim_perturb.obs_builder import obs_builder
 
 _POLICY_TARGETS = {
@@ -94,17 +92,11 @@ def run(cfg):
     train_cfg = payload['cfg']
     r = _resolve_from_checkpoint(train_cfg, cfg.get('dataset_path_override', None))
 
-    # output layout: <base>/prelim_perturb_<task>_<abs|rel>/episode_<demo>, where
-    # <base> defaults to the checkpoint path with its extension removed (so results
-    # sit next to the checkpoint), or cfg.output_dir if provided.
-    abs_tag = 'abs' if r['abs_action'] else 'rel'
-    demo_index = int(cfg.demo_index)
-    if cfg.get('output_dir', None):
-        parent = str(cfg.output_dir)
-    else:
-        parent = os.path.join(os.path.splitext(ckpt)[0],
-                              f"prelim_perturb_{r['task_name']}_{abs_tag}", f"episode_{demo_index}")
-    output_dir = os.path.join(parent)
+    # output_dir is required (config `output_dir: ???`) and is the Hydra run dir
+    # (hydra.run.dir=${output_dir}), so Hydra's .hydra snapshot and the results below
+    # land in the same directory. The caller owns the layout (e.g. the launch scripts
+    # build <ckpt>/prelim_perturb_<task>_<abs|rel>/<backend>/episode_<demo>).
+    output_dir = str(cfg.output_dir)
     os.makedirs(output_dir, exist_ok=True)
 
     policy = _load_policy(train_cfg, payload, r['variant'], device, output_dir)
@@ -129,7 +121,7 @@ def run(cfg):
     bodies = bodies_mod.resolve_perturb_bodies(rs_env, sim, task_base, object_names_override=override)
     body_names = [b.name for b in bodies]
 
-    # --- metric + CRN ---
+    # --- metric + CRN (shared; the {eps0_j} seed is what makes runs overlayable) ---
     N = int(cfg.N)
     M = int(cfg.M) if cfg.get('M', None) is not None else int(policy.num_inference_steps)
     crn = CRNManager(k_s=N, horizon=H, action_dim=Da, eps0_seed=int(cfg.seeds.crn))
@@ -137,16 +129,9 @@ def run(cfg):
                                      distance_space=cfg.distance_space,
                                      max_batch=int(cfg.max_batch))
 
-    spe, sre = float(cfg.sigma_pos.eef), float(cfg.sigma_rot.eef)
-    spo, sro = float(cfg.sigma_pos.object), float(cfg.sigma_rot.object)
-    per_body_sigma = None
-    if cfg.get('per_body_sigma', None) is not None:
-        per_body_sigma = {k: (float(v['sigma_pos']), float(v['sigma_rot']))
-                          for k, v in cfg.per_body_sigma.items()}
-    perturb_targets = list(cfg.perturb_targets)
+    # --- perturbation backend (sim_state | obs_noise), selected purely by config ---
     K = int(cfg.K)
-    sigma_qpos = float(cfg.get('sigma_qpos', 0.0))
-    n_arm = len(rs_env.robots[0]._ref_joint_pos_indexes) if 'eef' in perturb_targets else None
+    backend = make_backend(cfg, r, policy, wrapper, bodies, rs_env)
 
     # --- episode loop ---
     ts = list(range(0, ep_len, int(cfg.stride)))
@@ -155,23 +140,13 @@ def run(cfg):
     grasp_rec = []
 
     for step_i, t in enumerate(ts):
+        # grasp flags come from the NOMINAL sim state under BOTH backends (figure
+        # shading only; the obs_noise backend never uses them to perturb).
         grasp_flags = obs_builder.detect_grasp_flags(wrapper, states, t, bodies, float(cfg.grasp_qpos_threshold))
         grasp_rec.append(grasp_flags)
 
-        nominal_obs = obs_builder.build_input(
-            wrapper, r['variant'], To, cfg.history_mode, states, t, applier=None)
-
-        rng_t = np.random.default_rng([int(cfg.seeds.perturb), int(t)])
-        perturbed = []
-        for _k in range(K):
-            realization = sample_realization(bodies, rng_t, spe, sre, spo, sro,
-                                             per_body_sigma=per_body_sigma,
-                                             sigma_qpos=sigma_qpos, n_arm_joints=n_arm)
-            applier = obs_builder.make_perturb_applier(
-                bodies, realization, float(cfg.grasp_qpos_threshold),
-                perturb_targets, int(cfg.settle_steps))
-            perturbed.append(obs_builder.build_input(
-                wrapper, r['variant'], To, cfg.history_mode, states, t, applier=applier))
+        nominal_obs = backend.build_nominal(wrapper, states, t)
+        perturbed = backend.build_perturbed(wrapper, states, t, K)
 
         do_control = (step_i % int(cfg.control_stride) == 0)
         res = metric.compute(policy, nominal_obs, perturbed, compute_control=do_control)
@@ -200,11 +175,11 @@ def run(cfg):
         distance_spaces=np.asarray(list(spaces), dtype=object),
         executed_start=np.int64(To - 1), horizon=np.int64(H), action_dim=np.int64(Da),
         K=np.int64(K), N=np.int64(N), M=np.int64(M),
-        history_mode=str(cfg.history_mode), perturb_targets=np.asarray(perturb_targets, dtype=object),
-        sigma_pos_eef=spe, sigma_rot_eef=sre, sigma_pos_object=spo, sigma_rot_object=sro,
+        history_mode=str(cfg.history_mode), perturbation_backend=str(backend.name),
         seed_perturb=np.int64(cfg.seeds.perturb), seed_crn=np.int64(cfg.seeds.crn),
         control_stride=np.int64(cfg.control_stride), config_hash=str(cfg_hash),
     )
+    save.update(backend.metadata())  # sim_state: perturb_targets + sigmas; obs_noise: noise params + std cache
     for sp in spaces:
         save[f'S_{sp}'] = np.asarray(acc[sp]['S'], dtype=np.float64)
         save[f'S_first_{sp}'] = np.asarray(acc[sp]['S_first'], dtype=np.float64)

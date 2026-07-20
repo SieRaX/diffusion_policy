@@ -1,0 +1,20 @@
+# @package perturbation_backend
+# Grasp-aware SE(3) perturbation of the MuJoCo simulator state (DEFAULT; original
+# behavior, bitwise-unchanged). These params apply ONLY to this backend.
+name: sim_state
+
+sigma_pos:                   # position noise std (meters)
+  eef: 0.005
+  object: 0.005
+sigma_rot:                   # orientation noise std (radians)
+  eef: 0.02
+  object: 0.02
+sigma_qpos: 0.01             # arm-joint noise std (radians) for the 'eef' source (JOINT-space;
+                             # the induced EEF Cartesian shift depends on the arm configuration)
+per_body_sigma: null         # optional {body_name: {sigma_pos, sigma_rot}} for non-grasped bodies
+perturb_targets: [eef, objects]  # objects | eef | [eef, objects]
+                             #   eef: Gaussian noise on the arm qpos (moves the end-effector, IK-free);
+                             #        grasped bodies follow the EEF's induced transform.
+                             #   objects: perturb free bodies (grasped -> follow the EEF ΔT,
+                             #            non-grasped -> independent noise).
+settle_steps: 0              # >0 would change the probed state (do not settle)
