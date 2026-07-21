@@ -1,0 +1,11 @@
+# @package probe_type
+# Ablation: fit a per-dimension std sigma from the NEIGHBOR DIFFERENCES of o, then probe
+# with o' = o + delta, delta ~ N(0, diag(sigma^2)). Still requires the neighbor search
+# (to fit sigma). The /d^2 normalization is replaced by /E||delta||^2.
+name: diag_std_noise
+
+max_radius: ${similarity_space.default_radius}
+min_neighbors: 3
+exclude_same_episode: false
+same_episode_window: 10
+project_out_temporal: true

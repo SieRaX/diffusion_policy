@@ -1,0 +1,12 @@
+npz: ???            # path to an exp2.npz
+output_dir: ???     # where figures + summary.md are written
+yscale: log         # timeline y-axis: log (default) | linear
+compare_prelim_npz: null   # optional prelim perturb.npz for the S_end overlay; must contain
+                           # the timeline episode; skip if null
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: .
+  output_subdir: null

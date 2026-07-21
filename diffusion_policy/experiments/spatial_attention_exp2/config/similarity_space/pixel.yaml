@@ -1,0 +1,7 @@
+# @package similarity_space
+# Image checkpoints only: similarity measured directly in (downsampled) pixel space.
+# Inert for low_dim (state space used directly).
+name: pixel
+default_radius: 1.0          # per-space neighbor radius; interpolated into probe_type.max_radius
+metric: euclidean            # euclidean | cosine
+downsample: 16               # resize each frame to (downsample x downsample) before flattening

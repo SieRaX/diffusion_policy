@@ -1,0 +1,78 @@
+# Probe-based observation-sensitivity S(o) — SHARED MEASUREMENT PARAMETERS ONLY.
+# Task / obs variant / dataset / n_obs_steps / horizon / abs_action are DERIVED
+# FROM THE CHECKPOINT, never configured here (same convention as
+# spatial_attention_prelim_perturb/config/perturb.yaml).
+#
+# Two state sets:
+#   PROBE POOL  = the FULL dataset (neighbors/probes come from anywhere);
+#   QUERY SET   = eval_episodes only (S(o) is evaluated only there).
+#
+# Hydra config GROUPS (switch with a single override, like the prelim's
+# perturbation_backend group):
+#   probe_type=real_neighbor_diff (DEFAULT) | diag_std_noise | fullcov_noise
+#   similarity_space=latent (DEFAULT) | pixel   (inert for low_dim: state used directly)
+
+defaults:
+  - _self_
+  - probe_type: real_neighbor_diff
+  - similarity_space: latent
+
+checkpoint: ???              # path to a flow-matching .ckpt (required)
+dataset_path_override: null  # only if the training-time dataset path is invalid here
+
+eval_episodes: [0]           # QUERY SET: episode indices to evaluate S(o) on
+stride: 1                    # evaluate/index every stride-th env timestep (probe pool AND query set)
+
+# Shared measurement scalars — SAME SEMANTICS as the prelim's K/N/M:
+K: 32                        # probes per query state
+N: 8                         # fixed CRN initial noises {eps0_j} for the ENDPOINT estimator
+M: null                      # ODE steps; null -> policy.num_inference_steps
+num_tz_draws: 32             # velocity estimator only: fixed {(tau_j, eps_j)} draws (CRN; tau stratified)
+t_stratified: true
+
+history_mode: tile_perturbed # tile_perturbed | consistent_perturbed | current_frame_only
+distance_space: both         # both | raw | norm — applies to S_end only (S_vel is intrinsically norm-space)
+include_gripper: true        # false -> exclude the gripper action dim (LAST dim) from ALL distances
+
+# Probe directions (never pooled):
+directions: config           # temporal | config | both
+both_weights: [0.5, 0.5]     # used only when directions=both
+
+# Estimator extras:
+endpoint_subset_frac: 0.5    # fraction of QUERY states for S_end
+endpoint_subset_min: 300     # if query set has <= this many states, S_end runs on ALL of them
+per_chunk_index: true        # log S per chunk index k
+s_first: true                # log the first-executed-action variant
+# distance normalization (/d^2) is ALWAYS ON — not a config field.
+
+# Grasp detection / segmentation — shared with the prelim conventions:
+grasp_qpos_threshold: 0.06   # heuristic: sum(|finger qpos|) below this == closed (Panda-specific)
+object_bodies: null          # optional {task_base: [object_name, ...]} override of the per-task lookup
+phases: [APPROACH, GRASP, TRANSPORT, PLACE]  # subset auto-resolved per task
+
+# Fallback for flagged states (fewer than min_neighbors valid neighbors):
+fallback: dtw                # dtw | default_horizon | downweight
+dtw:
+  features: [ee_pose, gripper]
+  per_phase_sigma: true
+
+figures:
+  timeline_episode: 0        # single episode index for the timeline + per-index heatmap (must be in eval_episodes)
+  compare_prelim_npz: null   # optional prelim run npz for the S_end overlay; skip if null
+
+seeds:
+  tz_draws: 0                # {(tau_j, eps_j)} set (velocity CRN)
+  crn: 0                     # the {eps0_j} set (endpoint CRN; prelim: seeds.crn)
+
+device: cuda:0
+max_batch: 64                # cap on the (samples) batch per model call
+output_dir: ???              # REQUIRED. Results + Hydra's .hydra snapshot both go here.
+
+hydra:
+  job:
+    chdir: false
+  run:
+    dir: ${output_dir}
+  sweep:
+    dir: ${output_dir}
+    subdir: ${hydra.job.num}

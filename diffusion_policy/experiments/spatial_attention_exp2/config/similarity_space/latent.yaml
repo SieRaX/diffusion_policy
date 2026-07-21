@@ -1,0 +1,12 @@
+# @package similarity_space
+# DEFAULT. For image checkpoints: latent = the trained policy's obs-encoder output
+# (encoder=policy_obs_encoder) or a separately trained VAE (encoder=vae).
+# For low_dim checkpoints this group is INERT: the observation vector (state space) is
+# used directly ("latent" and "state" coincide).
+name: latent
+default_radius: 1.0          # per-space neighbor radius; interpolated into probe_type.max_radius
+metric: euclidean            # euclidean | cosine
+encoder: policy_obs_encoder  # policy_obs_encoder | vae (image only; inert for low_dim)
+vae:
+  checkpoint: null           # required when encoder=vae (path to a trained VAE .pth)
+  latent_dim: null           # optional; inferred from the checkpoint if null

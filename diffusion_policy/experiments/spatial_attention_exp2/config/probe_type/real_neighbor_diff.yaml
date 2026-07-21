@@ -1,0 +1,12 @@
+# @package probe_type
+# Probes are ACTUAL dataset observations o' from the probe pool within max_radius of o
+# in the similarity space; both evaluations are on real inputs (nothing synthetic).
+# /d^2 distance normalization uses the real similarity-space distance d(o, o').
+name: real_neighbor_diff
+
+# Neighbor search (shared mechanics; the direction rules read these):
+max_radius: ${similarity_space.default_radius}
+min_neighbors: 3             # query states with fewer valid neighbors are flagged -> fallback
+exclude_same_episode: false  # global same-episode exclusion (directions=config also excludes)
+same_episode_window: 10      # temporal direction: |Δt| <= this within the query's OWN episode
+project_out_temporal: true   # config direction: project the local temporal direction out of each δ

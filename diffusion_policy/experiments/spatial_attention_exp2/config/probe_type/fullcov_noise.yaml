@@ -1,0 +1,12 @@
+# @package probe_type
+# Ablation: fit a low-rank covariance Sigma (PCA of the neighbor differences, rank `rank`),
+# then probe with delta ~ N(0, Sigma). Still requires the neighbor search. The /d^2
+# normalization is replaced by /E||delta||^2.
+name: fullcov_noise
+rank: 16                     # PCA rank of the fitted neighbor-difference covariance
+
+max_radius: ${similarity_space.default_radius}
+min_neighbors: 3
+exclude_same_episode: false
+same_episode_window: 10
+project_out_temporal: true
